@@ -15,8 +15,14 @@ from PySide6.QtQml import QQmlApplicationEngine
 from datetime import datetime
 import csv
 
+# Modo de ejecución (debug o production)
+production_mode = False
+debug_mode = not production_mode
+
 import os
-os.environ.setdefault("QT_QPA_PLATFORM", "wayland")
+if production_mode:
+    os.environ.setdefault("QT_QPA_PLATFORM", "wayland")
+
 
 import re
 import time
@@ -48,6 +54,7 @@ class Backend(QObject):
     newSample = Signal(float, float, float)
     activeChanged = Signal(bool)
     angleUpdate = Signal(float, float)
+    angleMaxMin = Signal(float, float)
     newLDRSampleWithAngle = Signal(float, float, float, float, float)
     serialStatusChanged = Signal(str)
     csvSaved = Signal(str)
@@ -61,6 +68,9 @@ class Backend(QObject):
         self._t = 0.0
         self._dt = 0.003              # 50 ms ≈ 20 Hz
         self._use_ads = False
+        # Ángulos de barrido
+        self.angMin = 70.0
+        self.angMax = 80.0
 
         # Parámetros divisor
         self._vcc = 3.3
@@ -368,6 +378,16 @@ class Backend(QObject):
                 print(f"Advertencia: no se pudo apagar LED: {e}")
             self._send_serial("s\n")
         self.activeChanged.emit(self._active)
+    
+    @Slot()
+    def viewAngles(self):
+        self.angleMaxMin.emit(self.angMin, self.angMax)
+
+    @Slot(float, float)
+    def setMaxMinAngles(self, aMin: float, aMax: float):
+        self.angMin = aMin
+        self.angMax = aMax
+        print(f"Ángulos actualizados: Min={self.angMin}, Max={self.angMax}")
 
     def isActive(self) -> bool:
         return self._active
@@ -415,8 +435,12 @@ def main():
         except Exception as e:
             print(f"Advertencia: no se pudo apagar LED al salir: {e}")
     app.aboutToQuit.connect(_cleanup)
-
-    qml_path = Path(__file__).parent / "ui" / "LDRMonitor_maximo.qml"   # modificado a LDRMonitor.qml
+    
+    if production_mode:
+        qml_path = Path(__file__).parent / "ui" / "LDRMonitor_maximo.qml"   # modificado a LDRMonitor.qml
+    else:
+        qml_path = "LDRMonitor_maximo.qml"
+    
     print(f"Cargando interfaz: {qml_path}")
     engine.load(str(qml_path))
 
