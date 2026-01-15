@@ -3,16 +3,23 @@ import QtQuick 6.0
 import QtQuick.Controls 6.0
 import QtQuick.Layouts 6.0
 import QtQuick.Window 6.0
+import QtQuick.Dialogs 6.0
 
 // ===== LDR Monitor =====
 ApplicationWindow {
     id: win
     visible: true
-    visibility: Window.FullScreen
+    // visibility: Window.FullScreen
+    visibility: Window.Maximized
     width: 800
     height: 480
     title: "LDR Monitor"
     color: "#0f172a"
+
+    // ===== Import others files =====
+    AnglesDialog {
+        id: winAngles
+    }
 
     // ===== Estado / datos =====
     property bool  active: false
@@ -31,8 +38,8 @@ ApplicationWindow {
     property real xMaxDeg: 78.2
 
     // Detección de ida 39→50 (base)
-    property real forwardStartDeg: 71.0
-    property real forwardEndDeg:   78.0
+    property real forwardStartDeg: 0.0
+    property real forwardEndDeg:   0.0
     property real epsAngle: 0.003
     property real prevAngle: NaN
     property bool collectingForward: false
@@ -253,13 +260,25 @@ ApplicationWindow {
                     smooth: true
                     mipmap: true
                     antialiasing: true
-                    anchors.verticalCenter: parent.verticalCenter
+                    Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
+
                 }
 
                 // Título
                 Label { text: "Sensor SPR"; color: "white"; font.bold: true; font.pixelSize: 20 }
 
                 Rectangle { Layout.fillWidth: true; color: "transparent" }
+
+                Button {
+                    text: "Definir angulos" 
+                    Layout.preferredHeight: 36; Layout.preferredWidth: 120; font.pixelSize: 14
+                    ToolTip.visible: hovered
+                    ToolTip.text: "Establece los ángulos máximo y mínimo de barrido"
+                    onClicked: {
+                        backend.viewAngles()   // solicita los ángulos actuales al backend
+                        winAngles.open()
+                    }
+                }
 
                 Button {
                     text: win.viewMode === "curve" ? "Ver Ciclos" : "Ver Curva"
@@ -705,7 +724,13 @@ ApplicationWindow {
         }
 
         function onCsvSaved(path) { console.log("CSV guardado en: " + path); }
+        
         function onCsvError(msg)  { console.log("Error CSV: " + msg); }
+        
+        function onAngleMaxMin(angMin, angMax) {
+            win.forwardStartDeg = angMin;
+            win.forwardEndDeg   = angMax;
+        }
     }
 
     // Compatibilidad con pantallas antiguas
