@@ -5,18 +5,19 @@ import QtQuick.Layouts 6.0
 import QtQuick.Window 6.0
 import QtQuick.Dialogs 6.0
 
+
 // ===== LDR Monitor =====
 ApplicationWindow {
     id: win
     visible: true
-    // visibility: Window.FullScreen
-    visibility: Window.Maximized
+    visibility: Window.FullScreen
+    //visibility: Window.Maximized
     width: 800
     height: 480
     title: "LDR Monitor"
     color: "#0f172a"
-
-    // ===== Import others files =====
+    
+    // ===== Otros archivos importados =====
     AnglesDialog {
         id: winAngles
     }
@@ -34,8 +35,8 @@ ApplicationWindow {
     property string viewMode: "curve"       // "curve" | "cycles"
 
     // Rango X (solo tramo de interés)
-    property real xMinDeg: 70.8
-    property real xMaxDeg: 78.2
+    property real xMinDeg: 0.0  //--
+    property real xMaxDeg: 0.0
 
     // Detección de ida 39→50 (base)
     property real forwardStartDeg: 0.0
@@ -730,6 +731,8 @@ ApplicationWindow {
         function onAngleMaxMin(angMin, angMax) {
             win.forwardStartDeg = angMin;
             win.forwardEndDeg   = angMax;
+            xMinDeg = win.forwardStartDeg - 1
+            xMaxDeg = win.forwardEndDeg + 1
         }
     }
 

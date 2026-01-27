@@ -308,7 +308,8 @@ class Backend(QObject):
                 try:
                     s = line.decode("utf-8", errors="ignore").strip()
                     if s:
-                        print(f"SER RX <- {s}")
+                        #print(f"SER RX <- {s}")
+                        pass
                 except Exception:
                     continue
                 m = re.search(r"abs=([-+]?\d+\.?\d*)\s+rel=([-+]?\d+\.?\d*)", s)
@@ -367,6 +368,8 @@ class Backend(QObject):
             except Exception as e:
                 print(f"Advertencia: no se pudo encender LED: {e}")
             self._send_serial("o\n")
+            self._send_serial(f"a{self.angMin}\n")
+            self._send_serial(f"a{self.angMax}\n")
         else:
             print("Deteniendo adquisición de datos...")
             self.timer.stop()

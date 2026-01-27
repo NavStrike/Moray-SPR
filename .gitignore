@@ -1,2 +1,4 @@
 //Archivos a ignorar en Git
 notesDev.md
+./entornoGUI
+./Doc
