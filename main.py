@@ -361,25 +361,15 @@ class Backend(QObject):
         if on:
             print("Iniciando adquisición de datos...")
             self.timer.start()
-            print("marca 1")
             try:
-                print("marca 2")
                 if self.laser is not None:
                     self.laser.on()
                     print("LED encendido")
             except Exception as e:
-                print("marca 3")
                 print(f"Advertencia: no se pudo encender LED: {e}")
-            
-            print("************************")
-            print("************************")
-            print(self.angMin, self.angMax)
-            print("************************")
-            print("************************")
-            
+
             self._send_serial("o\n")
-            self._send_serial(f"a{self.angMin}\n")
-            self._send_serial(f"a{self.angMax}\n")
+            
         
         else:
             print("Deteniendo adquisición de datos...")
@@ -401,6 +391,12 @@ class Backend(QObject):
     def setMaxMinAngles(self, aMin: float, aMax: float):
         self.angMin = aMin
         self.angMax = aMax
+
+        time.sleep(0.1)
+        self._send_serial(f"a{aMin}\n")
+        time.sleep(0.1)
+        self._send_serial(f"b{aMax}\n")
+        
         print(f"Ángulos actualizados: Min={self.angMin}, Max={self.angMax}")
 
     def isActive(self) -> bool:
