@@ -5,7 +5,6 @@ import QtQuick.Layouts 6.0
 import QtQuick.Window 6.0
 import QtQuick.Dialogs 6.0
 
-
 // ===== LDR Monitor =====
 ApplicationWindow {
     id: win
@@ -18,9 +17,7 @@ ApplicationWindow {
     color: "#0f172a"
     
     // ===== Otros archivos importados =====
-    AnglesDialog {
-        id: winAngles
-    }
+    AnglesDialog {id: winAngles}
 
     // ===== Estado / datos =====
     property bool  active: false
@@ -32,13 +29,18 @@ ApplicationWindow {
     property real  angleRel: NaN
 
     // Vista
-    property string viewMode: "curve"       // "curve" | "cycles"
+    property string viewMode: "curve"       // "curve" | "cycles" 
 
     // Rango X (solo tramo de interés)
     property real xMinDeg: 0.0  //--
     property real xMaxDeg: 0.0
 
-    // Detección de ida 39→50 (base)
+    // Limites fijos mecanismo
+    // Solo cambiar al modificar el hardware
+    property real upLimit: 82
+    property real downLimit: 15
+
+    // Detección de ida forwardStartDeg → forwardEndDeg
     property real forwardStartDeg: 0.0
     property real forwardEndDeg:   0.0
     property real epsAngle: 0.003
@@ -77,15 +79,17 @@ ApplicationWindow {
     property int  incStreak: 0
     property int  decStreak: 0
 
-    property real startGateDelta: 0.20  // debe rebasar 39 + delta
-    property real endGateDelta:   0.20  // debe alcanzar 50 - delta
+    property real startGateDelta: 0.20  // debe rebasar forwardStartDeg + delta
+    property real endGateDelta:   0.20  // debe alcanzar forwardEndDeg - delta
     property real coverageMinSpan: 4.0  // ° recorridas mínimas durante la ida
 
-    property bool sawStartGate: false   // cruzó 39+delta
+    property bool sawStartGate: false   // cruzó xMinDeg+delta
     property bool sawEndGate:   false   // cruzó 50-delta
     property real minA:  9999.0         // mínimo ángulo dentro del ciclo
     property real maxA: -9999.0         // máximo ángulo dentro del ciclo
     // ========================================
+
+    // ===== Variables de prueba =====
 
     // === helpers estadísticos ===
     function _median(arr) {
@@ -266,12 +270,13 @@ ApplicationWindow {
                 }
 
                 // Título
-                Label { text: "Sensor SPR"; color: "white"; font.bold: true; font.pixelSize: 20 }
+                Label { text: "Sensor SPR B"; color: "white"; font.bold: true; font.pixelSize: 20 }
 
                 Rectangle { Layout.fillWidth: true; color: "transparent" }
 
                 Button {
-                    text: "Definir angulos" 
+                    text: "Definir angulos"
+                    enabled: !win.active
                     Layout.preferredHeight: 36; Layout.preferredWidth: 120; font.pixelSize: 14
                     ToolTip.visible: hovered
                     ToolTip.text: "Establece los ángulos máximo y mínimo de barrido"
@@ -279,6 +284,17 @@ ApplicationWindow {
                         backend.viewAngles()   // solicita los ángulos actuales al backend
                         winAngles.open()
                     }
+                }
+
+                Button {
+                    text: "Cero relativo"
+                    enabled: !win.active
+                    onClicked: backend.setRelativeZero()
+                    Layout.preferredHeight: 36
+                    Layout.preferredWidth: 130
+                    font.pixelSize: 14
+                    ToolTip.visible: hovered
+                    ToolTip.text: "Captura el ángulo absoluto actual como cero (ZC)"
                 }
 
                 Button {
@@ -290,25 +306,16 @@ ApplicationWindow {
                     }
                     Layout.preferredHeight: 36; Layout.preferredWidth: 120; font.pixelSize: 14
                     ToolTip.visible: hovered
-                    ToolTip.text: "Alterna entre Curva (Ángulo vs Corriente) y Ciclos (máximos)"
+                    ToolTip.text: "Alterna entre Curva (Ángulo vs Resistencia) y Ciclos (máximos)"
                 }
 
                 Switch { checked: win.active; onToggled: backend.setActive(checked) }
                 Label { text: win.active ? "Activo" : "Inactivo"; color: "white"; font.pixelSize: 14 }
 
-                Button {
-                    text: "Cero relativo"
-                    onClicked: backend.setRelativeZero()
-                    Layout.preferredHeight: 36
-                    Layout.preferredWidth: 130
-                    font.pixelSize: 14
-                    ToolTip.visible: hovered
-                    ToolTip.text: "Captura el ángulo absoluto actual como cero (ZC)"
-                }
-
                 //Button { text: "Salir"; onClicked: Qt.quit(); Layout.preferredHeight: 36; Layout.preferredWidth: 80; font.pixelSize: 14 }
                 Button {
                     text: "Salir"
+                    
                     onClicked: {
                         if (win.active) backend.setActive(false)   // <-- envía "s\n" al ESP32
                         Qt.quit()
@@ -321,7 +328,7 @@ ApplicationWindow {
         }
 
 
-        // ===== Panel de lecturas (mA) =====
+        // ===== Panel de lecturas (kΩ) =====
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 100
@@ -342,13 +349,13 @@ ApplicationWindow {
                     Label { text: isFinite(ch2) ? (ch2/1000).toFixed(2) : "—"; color: "white"; font.pixelSize: 32; font.bold: true }
                 }
                 ColumnLayout {
-                    Label { text: "Ángulo abs (°)"; color: "#fbbf24"; font.pixelSize: 14; font.bold: true }
-                    Label { text: isFinite(win.angleAbs) ? win.angleAbs.toFixed(2) : "—"; color: "white"; font.pixelSize: 28; font.bold: true }
-                }
-                ColumnLayout {
-                    Label { text: "Ángulo rel (°)"; color: "#f472b6"; font.pixelSize: 14; font.bold: true }
+                    Label { text: "Ángulo (°)"; color: "#f472b6"; font.pixelSize: 14; font.bold: true }
                     Label { text: isFinite(win.angleRel) ? win.angleRel.toFixed(2) : "—"; color: "white"; font.pixelSize: 28; font.bold: true }
                 }
+                //ColumnLayout {
+                    //Label { text: "Ángulo abs (°)"; color: "#fbbf24"; font.pixelSize: 14; font.bold: true }
+                    //Label { text: isFinite(win.angleAbs) ? win.angleAbs.toFixed(2) : "—"; color: "white"; font.pixelSize: 28; font.bold: true }
+                //}
 
                 Rectangle { Layout.fillWidth: true; color: "transparent" }
 
@@ -368,7 +375,7 @@ ApplicationWindow {
                             win.minA = 9999.0; win.maxA = -9999.0
 
                             backend.setActive(true)
-                            if (win.debugLogs) console.log("[cycle] START (ida 39→50)")
+                            if (win.debugLogs) console.log("[cycle] START IDA")
                         }
                         Layout.preferredHeight: 45; Layout.preferredWidth: 120; font.pixelSize: 16
                     }
@@ -413,7 +420,7 @@ ApplicationWindow {
             color: "#111827"
             border.color: "#1f2937"; border.width: 1
 
-            // ---- Corriente (mA) vs Ángulo (°) ----
+            // ---- Resistencia (kΩ) vs Ángulo (°) ----
             Canvas {
                 id: plot
                 visible: win.viewMode === "curve"
@@ -421,7 +428,7 @@ ApplicationWindow {
                 anchors.margins: 20
                 antialiasing: true
                 property real xTickStep: 1.0
-
+                
                 onPaint: {
                     const ctx = getContext("2d");
                     const W=width, H=height;
@@ -434,6 +441,11 @@ ApplicationWindow {
                     // marco
                     ctx.strokeStyle="#1f2937"; ctx.strokeRect(ml,mt,pw,ph);
 
+                    ctx.fillStyle="#9ca3af"; ctx.font="12px sans-serif"; ctx.textAlign="center";
+                    ctx.fillText("Ángulo (°)", ml+pw/2, H-6);
+                    ctx.save(); ctx.translate(12, mt+ph/2+30); ctx.rotate(-Math.PI/2);
+                    ctx.fillText("Resistencia (kΩ)", 0, 0); ctx.restore();
+
                     const xmin=win.xMinDeg, xmax=win.xMaxDeg;
                     const xspan=Math.max(1e-9,xmax-xmin);
                     const xMap=(vx)=> ml + ((vx-xmin)/xspan)*pw;
@@ -441,16 +453,22 @@ ApplicationWindow {
                     // construir data desde la mediana-de-medianas
                     const keys = Object.keys(win.globalAngleHistory).sort((a,b)=>parseFloat(a)-parseFloat(b));
                     const dataArr=[];
-                    for (let i=0;i<keys.length;i++){
-                        const k=keys[i]; const a=parseFloat(k);
+                    for (let i=0;i<data.length;i++){
+                        const ldr1=data["ch1"];
+                        const ldr2=data["ch2"];
+                        const a=data["angle"];
                         if (a<xmin||a>xmax) continue;
-                        const ch1_mA = getMoM_mA(k,1);
-                        const ch2_mA = getMoM_mA(k,2);
+                        // COLOCACION DE LAS RESISTENCIAS EN KOHMS
+                        const ch1_mA = (ldr1(k,1)/1000).toFixed(2);
+                        const ch2_mA = (ldr2(k,2)/1000).toFixed(2);
                         if (!isFinite(ch1_mA) && !isFinite(ch2_mA)) continue;
                         dataArr.push({angle:a, ch1_mA:ch1_mA, ch2_mA:ch2_mA});
                     }
+
                     if (dataArr.length===0){
-                        ctx.fillStyle="#9ca3af"; ctx.fillText("Sin datos agregados aún…", ml+10, mt+20);
+                        ctx.fillStyle="#9ca3af"
+                        ctx.textAlign="left"
+                        ctx.fillText("Sin datos agregados aún…", ml+10, mt+20);
                         return;
                     }
 
@@ -491,10 +509,6 @@ ApplicationWindow {
                         const vy=yMin+(yMax-yMin)*(gy/6); const y=mt+ph*(1-gy/6);
                         ctx.fillText(vy.toFixed(3), ml-6, y+4);
                     }
-                    ctx.textAlign="center";
-                    ctx.fillText("Ángulo (°)", ml+pw/2, H-6);
-                    ctx.save(); ctx.translate(12, mt+ph/2+30); ctx.rotate(-Math.PI/2);
-                    ctx.fillText("Corriente (mA)", 0, 0); ctx.restore();
 
                     function drawPolyline(color, acc){
                         ctx.strokeStyle=color; ctx.lineWidth=2; ctx.beginPath();
@@ -514,6 +528,7 @@ ApplicationWindow {
                     }
                     drawPolyline("#22c55e", d=>d.ch1_mA);
                     drawPolyline("#60a5fa", d=>d.ch2_mA);
+                    print("graficando ...")
                 }
             }
 
@@ -526,11 +541,13 @@ ApplicationWindow {
                 antialiasing: true
 
                 onPaint: {
-                    const ctx=getContext("2d"); const W=width,H=height;
+                    const ctx=getContext("2d"); const W=width, H=height;
                     ctx.clearRect(0,0,W,H); ctx.fillStyle="#111827"; ctx.fillRect(0,0,W,H);
 
                     const ml=80,mr=10,mt=10,mb=30; const pw=W-ml-mr, ph=H-mt-mb;
                     if (pw<=0||ph<=0) return;
+
+                    // marco
                     ctx.strokeStyle="#1f2937"; ctx.strokeRect(ml,mt,pw,ph);
 
                     ctx.fillStyle="#9ca3af"; ctx.font="12px sans-serif"; ctx.textAlign="center";
@@ -539,7 +556,9 @@ ApplicationWindow {
                     ctx.fillText("Ángulo del máximo (°)", 0, 0); ctx.restore();
 
                     const n1=win.cycleMaxCh1Angles.length, n2=win.cycleMaxCh2Angles.length;
-                    const N=Math.max(n1,n2); if (N===0){
+                    const N=Math.max(n1,n2); 
+                    
+                    if (N===0){
                         ctx.fillStyle="#9ca3af"; ctx.textAlign="left";
                         ctx.fillText("Sin ciclos completados aún…", ml+10, mt+20); return;
                     }
@@ -626,14 +645,16 @@ ApplicationWindow {
         target: backend
 
         function onNewLDRSampleWithAngle(tt, v1, v2, absDeg, relDeg) {
+
             win.ch1 = v1; win.ch2 = v2;
             win.angleAbs = absDeg; win.angleRel = relDeg;
 
             const a = relDeg;
             const prev = win.prevAngle;
+            //Por investigar
             const eps  = Math.max(win.epsAngle, win.hysteresisDeg);
+            //Valida que el angulo se encuentre en el rango establecido
             const inside = isFinite(a) && a >= win.forwardStartDeg && a <= win.forwardEndDeg;
-
             let inc = false, dec = false;
             if (isFinite(prev)) {
                 const d = a - prev;
@@ -644,8 +665,8 @@ ApplicationWindow {
             // rachas
             if (inc) { win.incStreak++; win.decStreak = 0; }
             else if (dec) { win.decStreak++; win.incStreak = 0; }
-
-            // INICIO de ciclo (ida 39→50)
+            
+            // Inicio de ciclo de ida
             if (!win.collectingForward) {
                 if (inside && win.incStreak >= win.incNeeded) {
                     win.collectingForward = true;
@@ -665,6 +686,7 @@ ApplicationWindow {
                     if (a > win.maxA) win.maxA = a;
                     if (a >= (win.forwardStartDeg + win.startGateDelta)) win.sawStartGate = true;
                     if (a >= (win.forwardEndDeg   - win.endGateDelta))   win.sawEndGate   = true;
+                    console.log("esta dentro del rango")
 
                     win.data.push({ angle: a, ch1: v1, ch2: v2 });
                     const key = a.toFixed(win.angleKeyDecimals);
@@ -680,11 +702,18 @@ ApplicationWindow {
                 const endByExit  = (!inside && isFinite(a) && a > win.forwardEndDeg);
                 const ending     = endByDec || endByExit;
 
+                console.log("termino de ciclo")
+
                 // Abort: bajada sostenida antes de alcanzar el fin
                 const abortByEarlyDec = (!reachedEnd && win.decStreak >= win.decNeeded);
-
+                
+                console.log(ending && win.pendingCycleSnapshot)
+                
                 if (ending && win.pendingCycleSnapshot) {
+                    
                     finalizeCycleAndAppendPoint();
+
+                    console.log("fin de ciclo")
                     win.pendingCycleSnapshot = false;
                     win.collectingForward = false;
                     win.cycleBuckets = ({})
@@ -739,4 +768,5 @@ ApplicationWindow {
     // Compatibilidad con pantallas antiguas
     Connections { target: backend; function onNewSample(tt, v0, v1) { win.ch1 = v0; win.ch2 = v1; } }
 }
+
 

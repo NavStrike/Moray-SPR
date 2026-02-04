@@ -6,26 +6,27 @@ Autor: moyraTech - Proyecto ProInnova SensorSPR
 File Name: main.py
 """
 
-from pathlib import Path
-import sys
-import math
 from PySide6.QtCore import QObject, Signal, Slot, QTimer
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
+
 from datetime import datetime
+from pathlib import Path
+import sys
+import math
 import csv
+import re
+import time
+
 
 # Modo de ejecución (debug o production)
-production_mode = True
+production_mode = False
 debug_mode = not production_mode
 
 import os
+
 if production_mode:
     os.environ.setdefault("QT_QPA_PLATFORM", "wayland")
-
-
-import re
-import time
 
 # ===== Serial opcional (ESP32) =====
 try:
@@ -50,13 +51,15 @@ class Backend(QObject):
     Backend para comunicación entre Python y QML.
     """
 
+    # transmicion de data
     newLDRSample = Signal(float, float, float)
-    newSample = Signal(float, float, float)
-    activeChanged = Signal(bool)
-    angleUpdate = Signal(float, float)
-    angleMaxMin = Signal(float, float)
     newLDRSampleWithAngle = Signal(float, float, float, float, float)
+    angleUpdate = Signal(float, float)
+    # Cambios de estado
+    activeChanged = Signal(bool)
+    angleMaxMin = Signal(float, float)
     serialStatusChanged = Signal(str)
+    # Archivos de guardado
     csvSaved = Signal(str)
     csvError = Signal(str)
 
@@ -68,6 +71,7 @@ class Backend(QObject):
         self._t = 0.0
         self._dt = 0.003              # 50 ms ≈ 20 Hz
         self._use_ads = False
+
         # Ángulos de barrido
         self.angMin = 70.0
         self.angMax = 80.0
@@ -75,7 +79,7 @@ class Backend(QObject):
         # Parámetros divisor
         self._vcc = 3.3
         self._r_fixed = 100_000.0
-        self._ldr_to_vcc = False
+        self._vldr_to_ildr = False
 
         # LED (láser) opcional
         self.laser = None
@@ -147,7 +151,7 @@ class Backend(QObject):
     @Slot('QVariantList')
     def saveCsv(self, data_list):
         """
-        Compatibilidad con tu QML actual.
+        Compatibilidad con QML actual.
         Guarda crudo como <fecha_hora>_datageneral.csv
         """
         try:
@@ -226,12 +230,14 @@ class Backend(QObject):
     # ===== Conversión Vout -> R_LDR (Ω) =====
     def _vout_to_rldr(self, vout: float) -> float:
         eps = 1e-6
-        v = max(min(vout, self._vcc - eps), eps)
-        if self._ldr_to_vcc:
+        vldr = max(min(vout, self._vcc - eps), eps)
+        if self._vldr_to_ildr:
             # Según tu implementación actual:
-            return v / self._r_fixed
+            return vldr / self._r_fixed
         else:
-            return self._r_fixed * (v / (self._vcc - v))
+            return self._r_fixed * (vldr / (self._vcc - vldr))
+
+    
 
     # ===== Serial =====
     def _open_serial(self):
@@ -396,7 +402,8 @@ class Backend(QObject):
         self._send_serial(f"a{aMin}\n")
         time.sleep(0.1)
         self._send_serial(f"b{aMax}\n")
-        
+        time.sleep(0.1)
+
         print(f"Ángulos actualizados: Min={self.angMin}, Max={self.angMax}")
 
     def isActive(self) -> bool:
@@ -426,7 +433,6 @@ class Backend(QObject):
 
         # emitir
         self.newLDRSample.emit(self._t, ch1_res, ch2_res)
-        self.newSample.emit(self._t, ch1_res, ch2_res)
         self.newLDRSampleWithAngle.emit(self._t, ch1_res, ch2_res, self._last_abs, self._last_rel)
 
 
@@ -446,10 +452,7 @@ def main():
             print(f"Advertencia: no se pudo apagar LED al salir: {e}")
     app.aboutToQuit.connect(_cleanup)
     
-    if production_mode:
-        qml_path = Path(__file__).parent / "ui" / "LDRMonitor_maximo.qml"   # modificado a LDRMonitor.qml
-    else:
-        qml_path = "LDRMonitor_maximo.qml"
+    qml_path = Path(__file__).parent / "ui" / "LDRMonitor_maximo_b.qml"
     
     print(f"Cargando interfaz: {qml_path}")
     engine.load(str(qml_path))
@@ -457,6 +460,12 @@ def main():
     if not engine.rootObjects():
         print("Error: No se pudo cargar la interfaz QML")
         sys.exit(1)
+
+    try:
+        backend.setAbsoluteZero(286.08)
+        print("No se ha establecido el cero en 286.08")
+    except:
+        print("No se ha podido establecer el cero")
 
     print("Aplicación iniciada. Use los controles en pantalla para activar/desactivar.")
     print("Presione Ctrl+C o use el botón 'Salir' para terminar.")

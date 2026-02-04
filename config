@@ -1,0 +1,3 @@
+production_mode: True
+self.angMin = 70.0
+self.angMax = 80.0
