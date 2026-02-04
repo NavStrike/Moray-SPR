@@ -428,7 +428,7 @@ ApplicationWindow {
                 anchors.margins: 20
                 antialiasing: true
                 property real xTickStep: 1.0
-                
+
                 onPaint: {
                     const ctx = getContext("2d");
                     const W=width, H=height;
@@ -442,8 +442,9 @@ ApplicationWindow {
                     ctx.strokeStyle="#1f2937"; ctx.strokeRect(ml,mt,pw,ph);
 
                     ctx.fillStyle="#9ca3af"; ctx.font="12px sans-serif"; ctx.textAlign="center";
+                    ctx.textAlign="center";
                     ctx.fillText("Ángulo (°)", ml+pw/2, H-6);
-                    ctx.save(); ctx.translate(12, mt+ph/2+30); ctx.rotate(-Math.PI/2);
+                    ctx.save(); ctx.translate(10, mt+ph/2+30); ctx.rotate(-Math.PI/2);
                     ctx.fillText("Resistencia (kΩ)", 0, 0); ctx.restore();
 
                     const xmin=win.xMinDeg, xmax=win.xMaxDeg;
@@ -453,21 +454,17 @@ ApplicationWindow {
                     // construir data desde la mediana-de-medianas
                     const keys = Object.keys(win.globalAngleHistory).sort((a,b)=>parseFloat(a)-parseFloat(b));
                     const dataArr=[];
-                    for (let i=0;i<data.length;i++){
-                        const ldr1=data["ch1"];
-                        const ldr2=data["ch2"];
-                        const a=data["angle"];
+                    for (let i=0;i<keys.length;i++){
+                        const k=keys[i]; const a=parseFloat(k);
                         if (a<xmin||a>xmax) continue;
-                        // COLOCACION DE LAS RESISTENCIAS EN KOHMS
-                        const ch1_mA = (ldr1(k,1)/1000).toFixed(2);
-                        const ch2_mA = (ldr2(k,2)/1000).toFixed(2);
+                        const ch1_mA = getMoM_mA(k,1);
+                        const ch2_mA = getMoM_mA(k,2);
                         if (!isFinite(ch1_mA) && !isFinite(ch2_mA)) continue;
                         dataArr.push({angle:a, ch1_mA:ch1_mA, ch2_mA:ch2_mA});
                     }
-
                     if (dataArr.length===0){
                         ctx.fillStyle="#9ca3af"
-                        ctx.textAlign="left"
+                        ctx.textAlign="left";
                         ctx.fillText("Sin datos agregados aún…", ml+10, mt+20);
                         return;
                     }
@@ -528,7 +525,6 @@ ApplicationWindow {
                     }
                     drawPolyline("#22c55e", d=>d.ch1_mA);
                     drawPolyline("#60a5fa", d=>d.ch2_mA);
-                    print("graficando ...")
                 }
             }
 
@@ -645,6 +641,8 @@ ApplicationWindow {
         target: backend
 
         function onNewLDRSampleWithAngle(tt, v1, v2, absDeg, relDeg) {
+
+            console.log(v1, v2);
 
             win.ch1 = v1; win.ch2 = v2;
             win.angleAbs = absDeg; win.angleRel = relDeg;

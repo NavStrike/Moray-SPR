@@ -463,9 +463,9 @@ def main():
 
     try:
         backend.setAbsoluteZero(286.08)
-        print("No se ha establecido el cero en 286.08")
+        print("Se ha establecido el cero en 286.08")
     except:
-        print("No se ha podido establecer el cero")
+        print("No se ha podido establecer el cero en 286.08")
 
     print("Aplicación iniciada. Use los controles en pantalla para activar/desactivar.")
     print("Presione Ctrl+C o use el botón 'Salir' para terminar.")
