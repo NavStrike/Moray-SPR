@@ -1,0 +1,8 @@
+{
+    "Constants": {
+        "minAngleHardware": 20,
+        "maxAngleHardware": 80
+    },
+    "angMin": 74.0,
+    "angMax": 79.0
+}

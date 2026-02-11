@@ -59,6 +59,26 @@ Dialog {
                 Layout.fillWidth: true
 
                 Label{
+                    text: "Sustancia: "
+                    color: "white" 
+                    font.bold: true; font.pixelSize: 20
+                }
+                    
+                ComboBox {
+                    id: comboSubstance
+                    model: win.substances
+                    currentIndex: 0
+                    onActivated: {selectSubstance(currentText)}
+                    font.pixelSize: 20
+                    Layout.fillWidth: true
+                    displayText: currentIndex === 0 ? "Especifique los valores" : currentText
+                }
+            }
+
+            RowLayout{
+                Layout.fillWidth: true
+
+                Label{
                     text: "Ángulo mínimo (°): "
                     color: "white" 
                     font.bold: true; font.pixelSize: 20
@@ -104,7 +124,7 @@ Dialog {
                     text: "Cancelar"
                     //font.pixelSize: 14
                     Layout.fillWidth: true
-                    //Layout.preferredHeight: 80
+                    Layout.preferredHeight: 50
                     onClicked: winAngles.reject()
                 }
 
@@ -112,7 +132,7 @@ Dialog {
                     text: "Aceptar"
                     //font.pixelSize: 14
                     Layout.fillWidth: true
-                    //Layout.preferredHeight: 80
+                    Layout.preferredHeight: 50
                     onClicked: {
                         let a = parseFloat(anguloMin.text)
                         let b = parseFloat(anguloMax.text)
@@ -128,8 +148,7 @@ Dialog {
                             anguloMin.color = "red"; anguloMax.color = "red"
                             console.log(`Error: Los ángulos deben estar entre ${downLimit} y ${upLimit} grados.`);
                             return
-                        } else { winAngles.accept()}
-                            
+                        } else { winAngles.accept()} 
                     }
                 }
             }
@@ -184,4 +203,13 @@ Dialog {
         else {activeInput.color = "black"}
     }
 
+    function selectSubstance(){
+        if (comboSubstance.currentIndex !== 0){
+            anguloMin.enabled = false; anguloMax.enabled = false;
+            anguloMin.text = win.anglesSubstances[comboSubstance.currentIndex][0];
+            anguloMax.text = win.anglesSubstances[comboSubstance.currentIndex][1];
+        } else{
+            anguloMax.enabled = true; anguloMin.enabled = true;
+        }
+    }
 }

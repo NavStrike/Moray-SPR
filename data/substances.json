@@ -1,0 +1,23 @@
+{
+    "metadata": {
+        "unites_temperature": "°C",
+        "wavelength": 589.3,
+        "description": "Refractive indices and resonance angles"
+    },
+    "data": [
+        {
+            "name": "Agua",
+            "refractive_indice": 1.33336,
+            "temperature": 20,
+            "formula": "H2O",
+            "spr_angles": [70, 80]
+        },
+        {
+            "name": "Aire",
+            "refractive_indice": 1.0002924,
+            "temperature": 20,
+            "formula": null,
+            "spr_angles": [40, 50]
+        }
+    ]
+}

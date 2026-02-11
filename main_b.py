@@ -18,6 +18,7 @@ import csv
 import re
 import time
 
+from functions.adminData import accessData
 
 # Modo de ejecución (debug o production)
 production_mode = False
@@ -51,20 +52,30 @@ class Backend(QObject):
     Backend para comunicación entre Python y QML.
     """
 
-    # transmicion de data
+    # Transmicion de datos
     newLDRSample = Signal(float, float, float)
     newLDRSampleWithAngle = Signal(float, float, float, float, float)
     angleUpdate = Signal(float, float)
     # Cambios de estado
     activeChanged = Signal(bool)
     angleMaxMin = Signal(float, float)
+    substanceAct = Signal(list, list, str)
     serialStatusChanged = Signal(str)
-    # Archivos de guardado
+    # Guardado de archivos
     csvSaved = Signal(str)
     csvError = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
+
+        # Variables temporales de prueba
+        # Borrar despues de utilizarlas
+        ################################
+        self._angRelaIn = 65.00
+        self._angRelaTest = self._angRelaIn
+        self._angRelaFin = 85.00
+        self._advance = 0.1
+        ################################
 
         # Estado interno
         self._active = False
@@ -75,6 +86,15 @@ class Backend(QObject):
         # Ángulos de barrido
         self.angMin = 70.0
         self.angMax = 80.0
+
+        # Velocidades min y max
+        self.vmin = 4
+        self.vmax = 12
+
+        # Sustancia actual
+        self.listSubstances = []
+        self.anglesSubstances = []
+        self.substance = ""
 
         # Parámetros divisor
         self._vcc = 3.3
@@ -106,6 +126,14 @@ class Backend(QObject):
         she = self.serial_timer.timeout.connect(self._poll_serial)
         self._last_serial_rx_ms = 0
 
+        # Actualizacion de los valores a los almacenados por el programa
+        try:
+            self._setValues()
+            print("Se cargaron los datos correctamente")
+        except:
+            print("Ha ocurrido un error al cargar los datos")
+
+
         if _serial_available:
             self._open_serial()
         else:
@@ -134,6 +162,36 @@ class Backend(QObject):
             self._sim_phase = 0.0
             self._sim_phase2 = math.pi
 
+        # Establecimiento del zero relativo por defecto
+        try:
+            ang_abs = 16.84
+            self.setAbsoluteZero(ang_abs)
+            print(f"Se ha establecido el cero en {ang_abs}")
+        except:
+            print(f"No se ha podido establecer el cero en {ang_abs}")
+
+        try:
+            # Velocidades
+            self._send_serial(f"v1{self.vmin}\n")
+            time.sleep(0.3)
+            self._send_serial(f"v2{self.vmax}\n")
+            print("velocidad ingresada")
+        except:
+            print("Error en el establecimeinto de velocidades")
+
+    # ===== Lectura de datos guardados =====
+    def _setValues(self):
+        p1 = accessData()
+        # Ángulos de barrido
+        self.angMin = p1.data["angMin"]
+        self.angMax = p1.data["angMax"]
+
+        p2 = accessData("substances.json")
+        # Sustancias
+        subs = p2.data["data"]
+        self.listSubstances = [s["name"] for s in subs]; self.listSubstances.insert(0,"Otra sustancia")
+        self.anglesSubstances = [s["spr_angles"] for s in subs]; self.anglesSubstances.insert(0,[0, 0])
+    
     # ===== Utilidades de exportación =====
     def _exports_dir(self) -> Path:
         out_dir = Path(__file__).parent / "exports"
@@ -236,8 +294,6 @@ class Backend(QObject):
             return vldr / self._r_fixed
         else:
             return self._r_fixed * (vldr / (self._vcc - vldr))
-
-    
 
     # ===== Serial =====
     def _open_serial(self):
@@ -393,17 +449,25 @@ class Backend(QObject):
     def viewAngles(self):
         self.angleMaxMin.emit(self.angMin, self.angMax)
 
+    @Slot()
+    def viewSubstance(self):
+        self.substanceAct.emit(self.listSubstances, self.anglesSubstances, self.substance)
+
     @Slot(float, float)
     def setMaxMinAngles(self, aMin: float, aMax: float):
         self.angMin = aMin
         self.angMax = aMax
+
+        # Actualizacion de los angulos guardados
+        m = accessData()
+        m.changeAngles([aMin, aMax])
 
         time.sleep(0.1)
         self._send_serial(f"a{aMin}\n")
         time.sleep(0.1)
         self._send_serial(f"b{aMax}\n")
         time.sleep(0.1)
-
+        
         print(f"Ángulos actualizados: Min={self.angMin}, Max={self.angMax}")
 
     def isActive(self) -> bool:
@@ -421,15 +485,27 @@ class Backend(QObject):
                 print(f"Error leyendo ADS1115: {e}")
                 ch1_voltage = float("nan")
                 ch2_voltage = float("nan")
-        else:
+        else :
             self._sim_phase += self._dt
             self._sim_phase2 += self._dt
             ch1_voltage = 1.65 + math.sin(self._sim_phase * 2 * math.pi / 2.0) * 1.0
             ch2_voltage = 1.65 + math.sin(self._sim_phase2 * 2 * math.pi / 2.5) * 0.8
 
+            if debug_mode:
+                # Asignacion de valores de angulo relativo y absoluto
+                self._last_rel = self._angRelaTest
+                self._last_abs = self._last_rel
+
+                # Codicional de 
+                if self._angRelaTest >= self._angRelaFin:
+                    self._angRelaTest = self._angRelaIn
+                else:
+                    self._angRelaTest += self._advance
+
+
         ch1_res = self._vout_to_rldr(ch1_voltage) if math.isfinite(ch1_voltage) else float("nan")
         ch2_res = self._vout_to_rldr(ch2_voltage) if math.isfinite(ch2_voltage) else float("nan")
-        print(f"ch1_res_current: {ch1_res}, ch2_res_current: {ch2_res}")
+        #print(f"ch1_res_current: {ch1_res}, ch2_res_current: {ch2_res}")
 
         # emitir
         self.newLDRSample.emit(self._t, ch1_res, ch2_res)
@@ -461,13 +537,7 @@ def main():
         print("Error: No se pudo cargar la interfaz QML")
         sys.exit(1)
 
-    try:
-        backend.setAbsoluteZero(286.08)
-        print("Se ha establecido el cero en 286.08")
-    except:
-        print("No se ha podido establecer el cero en 286.08")
-
-    print("Aplicación iniciada. Use los controles en pantalla para activar/desactivar.")
+    print("Aplicación iniciada. Use los controles en pantalla para activar/desactivar.", end="/n")
     print("Presione Ctrl+C o use el botón 'Salir' para terminar.")
 
     sys.exit(app.exec())
