@@ -4,6 +4,7 @@ import QtQuick.Controls 6.0
 import QtQuick.Layouts 6.0
 import QtQuick.Window 6.0
 import QtQuick.Dialogs 6.0
+// import QtQuick.Controls.Material 6.0
 
 // ===== LDR Monitor =====
 ApplicationWindow {
@@ -15,11 +16,12 @@ ApplicationWindow {
     height: 480
     title: "LDR Monitor"
     color: "#0f172a"
-    Component.onCompleted: {backend.viewAngles(); backend.viewSubstance(); console.log(forwardStartDeg, forwardEndDeg)}
+    palette.buttonText: "black"
     
     // ===== Otros archivos importados =====
     AnglesDialog {id: winAngles}
-    UtilsDialog {id: winUtils}
+    SpeedsDialog {id: winSpeeds}
+    ToolsDialog {id: winTools}
 
     // ===== Estado / datos =====
     property bool  active: false
@@ -39,8 +41,16 @@ ApplicationWindow {
 
     // Limites fijos mecanismo
     // Solo cambiar al modificar el hardware
+    // Limite movimiento
     property real upLimit: 85
     property real downLimit: 15
+    // Limite de velocidad
+    property real upLimitVel: 40
+    property real downLimitVel: 1
+
+    // Velocidades minima y maxima
+    property real velMinCycle: 0
+    property real velMaxCycle: 0
 
     // Sustancia
     property  var substances: []
@@ -286,7 +296,7 @@ ApplicationWindow {
                     ToolTip.visible: hovered
                     ToolTip.text: "Opciones adicionales"
                     onClicked: {
-                        winUtils.open()
+                        winTools.open()
                     }
                 }
 
@@ -300,6 +310,18 @@ ApplicationWindow {
                         backend.viewAngles()   // solicita los ángulos actuales al backend
                         backend.viewSubstance() // Solicita el nombre de la sustancia actual
                         winAngles.open()
+                    }
+                }
+
+                Button {
+                    text: "Definir velocidades"
+                    enabled: !win.active
+                    Layout.preferredHeight: 36; Layout.preferredWidth: 130; font.pixelSize: 14
+                    ToolTip.visible: hovered
+                    ToolTip.text: "Establece las velocidades máximo y mínimo de barrido"
+                    onClicked: {
+                        backend.viewSpeeds()   // solicita las velocidades actuales al backend
+                        winSpeeds.open()
                     }
                 }
 
@@ -780,6 +802,11 @@ ApplicationWindow {
             win.forwardEndDeg   = angMax;
             xMinDeg = win.forwardStartDeg - 1;
             xMaxDeg = win.forwardEndDeg + 1;
+        }
+
+        function onSpeedMaxMin(vMin, vMax) {
+            win.velMinCycle = vMin;
+            win.velMaxCycle = vMax;
         }
 
         function onSubstanceAct(list_subs, list_angles, subs){

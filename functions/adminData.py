@@ -1,7 +1,6 @@
 import json
 import os
 from pathlib import Path
-import pandas as pd
 import numpy as np
 from scipy.signal import find_peaks, peak_widths
 from scipy.ndimage import median_filter, uniform_filter
@@ -36,8 +35,14 @@ class accessData():
 
     def changeAngles(self, new_angles):
         #Actualiza solo los ángulos
-        self.data["angMin"] = new_angles[0]
-        self.data["angMax"] = new_angles[1]
+        self.data["angles"]["angMin"] = new_angles[0]
+        self.data["angles"]["angMax"] = new_angles[1]
+        self.update()
+    
+    def ChangeSpeeds(self, newSpeeds):
+        #Actualiza solo los ángulos
+        self.data["speeds"]["velMin"] = newSpeeds[0]
+        self.data["speeds"]["velMax"] = newSpeeds[1]
         self.update()
 
 class accessCsv():

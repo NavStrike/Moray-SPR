@@ -5,7 +5,7 @@ import QtQuick.Window 6.0
 import QtQuick.Dialogs 6.0
 
 Dialog {
-    id: winUtils
+    id: winTools
     title: "Herramientas adicionales"
     modal: true
     width: 800
@@ -46,7 +46,7 @@ Dialog {
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignHCenter
                 Layout.alignment: Qt.AlignHCenter
-                text: winUtils.title
+                text: winTools.title
                 font.bold: true
                 font.pixelSize: 20
                 color: "white"
@@ -83,7 +83,7 @@ Dialog {
                     //font.pixelSize: 14
                     Layout.fillWidth: true
                     Layout.preferredHeight: 50
-                    onClicked: winUtils.reject()
+                    onClicked: winTools.reject()
                 }
 
                 Button1 {
@@ -91,7 +91,7 @@ Dialog {
                     //font.pixelSize: 14
                     Layout.fillWidth: true
                     Layout.preferredHeight: 50
-                    onClicked: winUtils.accept()
+                    onClicked: winTools.accept()
                 }
             }
 

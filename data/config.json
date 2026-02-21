@@ -1,8 +1,15 @@
 {
+    "production": false,
     "Constants": {
         "minAngleHardware": 20,
         "maxAngleHardware": 80
     },
-    "angMin": 74.0,
-    "angMax": 79.0
+    "angles": {
+        "angMin": 74.0,
+        "angMax": 79.0
+    },
+    "speeds": {
+        "velMin": 4.0,
+        "velMax": 12.0
+    }
 }
