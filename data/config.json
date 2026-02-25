@@ -5,11 +5,16 @@
         "maxAngleHardware": 80
     },
     "angles": {
-        "angMin": 74.0,
-        "angMax": 79.0
+        "angZeroRel": 13.7607,
+        "angMin": 70.0,
+        "angMax": 80.0
     },
     "speeds": {
-        "velMin": 4.0,
-        "velMax": 12.0
+        "velMin": 2.0,
+        "velMax": 5.0
+    },
+    "device": {
+        "name": "photodetector",
+        "unites": "current"
     }
 }

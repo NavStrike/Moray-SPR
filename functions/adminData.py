@@ -38,6 +38,11 @@ class accessData():
         self.data["angles"]["angMin"] = new_angles[0]
         self.data["angles"]["angMax"] = new_angles[1]
         self.update()
+
+    def changeZeroRel(self, new_zero):
+        #Actualiza solo el cero relativo
+        self.data["angles"]["angZeroRel"] = new_zero
+        self.update()
     
     def ChangeSpeeds(self, newSpeeds):
         #Actualiza solo los ángulos

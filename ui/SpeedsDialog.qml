@@ -9,7 +9,7 @@ Dialog {
     property TextField activeInput: null
 
     id: winSpeeds
-    title: "Definir velpocidades de barrido"
+    title: "Definir velocidades de barrido"
     modal: true
     width: 800
     height: 400
@@ -66,7 +66,7 @@ Dialog {
                     
                 TextField {
                     id: velocityMin
-                    text: win.forwardStartDeg
+                    text: win.velMinCycle
                     font.pixelSize: 20
                     Layout.fillWidth: true
                     onActiveFocusChanged: if(activeFocus) activeInput = velocityMin
@@ -85,7 +85,7 @@ Dialog {
                     
                 TextField {
                     id: velocityMax
-                    text: win.forwardEndDeg
+                    text: win.velMaxCycle
                     font.pixelSize: 20
                     Layout.fillWidth: true
                     onActiveFocusChanged: if(activeFocus) activeInput = velocityMax
@@ -138,17 +138,17 @@ Dialog {
                 columns: 3
                 rows: 3
                 
-                Button1 {text: "0"; onClicked: {addNumber(0)}}
-                Button1 {text: "1"; onClicked: {addNumber(1)}}
-                Button1 {text: "2"; onClicked: {addNumber(2)}}
-                Button1 {text: "3"; onClicked: {addNumber(3)}}
-                Button1 {text: "4"; onClicked: {addNumber(4)}}
-                Button1 {text: "5"; onClicked: {addNumber(5)}}
-                Button1 {text: "6"; onClicked: {addNumber(6)}}
                 Button1 {text: "7"; onClicked: {addNumber(7)}}
                 Button1 {text: "8"; onClicked: {addNumber(8)}}
                 Button1 {text: "9"; onClicked: {addNumber(9)}}
-                Button1 {text: "Borrar"; onClicked: {activeInput.text = ""}
+                Button1 {text: "4"; onClicked: {addNumber(4)}}
+                Button1 {text: "5"; onClicked: {addNumber(5)}}
+                Button1 {text: "6"; onClicked: {addNumber(6)}}
+                Button1 {text: "1"; onClicked: {addNumber(1)}}
+                Button1 {text: "2"; onClicked: {addNumber(2)}}
+                Button1 {text: "3"; onClicked: {addNumber(3)}}
+                Button1 {text: "0"; onClicked: {addNumber(0)}}
+                Button1 {text: "Borrar"; onClicked: {activeInput.text = ""; activeInput.color = "black"}
                     Layout.columnSpan: 2
                     Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
                     Layout.preferredWidth: 168

@@ -73,6 +73,29 @@ Dialog {
                     //ToolTip.text: "Captura el ángulo absoluto actual como cero (ZC)"
                 }
             }
+
+            RowLayout{
+                Layout.fillWidth: true
+                spacing: 5
+
+                Label{
+                    text: "Cambiar el dispositivo de captura: "
+                    color: "white" 
+                    font.bold: true; font.pixelSize: 20
+                }
+                    
+                Button {
+                    text: win.device === "ldr" ? "Cambiar a fotodetector" : "Cambiar a LDR" 
+                    enabled: !win.active
+                    onClicked: {
+                        win.device = win.device === "ldr" ? "photodetector" : "ldr";
+                        backend.setAdqDevice(win.device);
+                    }
+                    Layout.preferredHeight: 36
+                    Layout.preferredWidth: 160
+                    font.pixelSize: 14
+                }
+            }
                 
             RowLayout {
                 Layout.fillWidth: true

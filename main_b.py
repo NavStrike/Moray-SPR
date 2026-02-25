@@ -45,8 +45,9 @@ except Exception as _e:
     _serial_available = False
 
 # ===== LED opcional con gpiozero =====
+
 try:
-    from gpiozero import LED
+    from gpiozero import LED # type: ignore
     _led_available = True
 except ImportError:
     print_warning("gpiozero no disponible, LED deshabilitado.")
@@ -65,6 +66,7 @@ class Backend(QObject):
     speedMaxMin = Signal(float, float)
     substanceAct = Signal(list, list, str)
     serialStatusChanged = Signal(str)
+    adqDeviceChanged = Signal(str, str)
     # Guardado de archivos
     csvSaved = Signal(str)
     csvError = Signal(str)
@@ -72,21 +74,30 @@ class Backend(QObject):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        # Variables temporales de prueba
-        # (Borrar despues de utilizarlas)
-        ################################
+        # ---------------------------------------------
+        # Designacion de variables y estados internos
+        # ---------------------------------------------
+
+        # Parametros de simulación (si no hay hardware)
         self._angRelaIn = 65.00
         self._angRelaTest = self._angRelaIn
         self._angRelaFin = 85.00
         self._advance = 0.1
-
-        ################################
 
         # Estado interno
         self._active = False
         self._t = 0.0
         self._dt = 0.003              # 50 ms ≈ 20 Hz
         self._use_ads = False
+
+        # ESP32 Serial
+        self.ser = None
+        self._serial_buf = b""
+        self._last_abs = float("nan")
+        self._last_rel = float("nan")
+
+        # Angulo cero relativo (ajustable)
+        self.angzeroRel = 13.7607
 
         # Ángulos de barrido
         self.angMin = 70.0
@@ -102,10 +113,22 @@ class Backend(QObject):
         self.substance = ""
 
         # Parámetros divisor
+        self._adq_device = "ldr" # "ldr" or "photodetector"
+        self._unites_device = "resistance" # "resistance" or "current"
         self._vcc = 3.3
-        self._r_fixed = 100_000.0
-        self._vldr_to_ildr = False
+        self._r_fixed_ldr = 100_000.0 # Resistencia circuito divisor LDR (ohms)
+        self._r_fixed_pho = 4_700.0 # Resistencia circuito divisor fotodiodo (ohms)
 
+        # Variables acumulativas de datos
+        self.dataAll = []   # [ciclo_1, ...] Acumulativo de todos los ciclos
+        self.dataPeaks = []  # [(Angulo_rel, ch1_peak, ch2_peak), ...] Datos de picos por ciclo
+        self.dataCycle = [] # [(Angulo_rel, ch1, ch2), ...]
+        self.dataProcess = [] # Data procesada para visualización
+
+        # ---------------------------------------------
+        # Inicializacion de hardware
+        # ---------------------------------------------
+        
         # LED (láser) opcional
         self.laser = None
         if _led_available:
@@ -116,28 +139,11 @@ class Backend(QObject):
                 print(f"No se pudo inicializar LED: {e}")
                 self.laser = None
 
-        # Timer adquisición
-        self.timer = QTimer(self)
-        self.timer.setInterval(int(self._dt * 1000))
-        self.timer.timeout.connect(self._on_timeout)
-
         # Serial ESP32
-        self.ser = None
-        self._serial_buf = b""
-        self._last_abs = float("nan")
-        self._last_rel = float("nan")
         self.serial_timer = QTimer(self)
         self.serial_timer.setInterval(10)
         she = self.serial_timer.timeout.connect(self._poll_serial)
         self._last_serial_rx_ms = 0
-
-        # Actualizacion de los valores a los almacenados por el programa
-        try:
-            self._setValues()
-            print_info("Se cargaron los datos correctamente")
-        except Exception as e:
-            print_error(f"Ha ocurrido un error al cargar los datos: {e}")
-
 
         if _serial_available:
             self._open_serial()
@@ -146,9 +152,9 @@ class Backend(QObject):
 
         # ADS1115 (si disponible)
         try:
-            import board
-            from adafruit_ads1x15.ads1115 import ADS1115, P0, P1
-            from adafruit_ads1x15.analog_in import AnalogIn
+            import board # type: ignore
+            from adafruit_ads1x15.ads1115 import ADS1115, P0, P1 # type: ignore
+            from adafruit_ads1x15.analog_in import AnalogIn # type: ignore
 
             print_info("Inicializando ADS1115...")
             i2c = board.I2C()
@@ -167,19 +173,34 @@ class Backend(QObject):
             self._sim_phase = 0.0
             self._sim_phase2 = math.pi
 
-        # Establecimiento del zero relativo por defecto
-        try:
-            ang_abs = 13.7607
-            self.setAbsoluteZero(ang_abs)
-            print_info(f"Se ha establecido el cero en {ang_abs}")
-        except Exception as e:
-            print_error(f"No se ha podido establecer el cero en {ang_abs}: {e}")
+        # Timer adquisición
+        self.timer = QTimer(self)
+        self.timer.setInterval(int(self._dt * 1000))
+        self.timer.timeout.connect(self._on_timeout)
 
-        # Establecimiento de los angulos min y max de barrido
+        # ---------------------------------------------
+        # Lectura de datos guardados y configuración inicial
+        # ---------------------------------------------
+
+        # Actualizacion de los valores a los almacenados por el programa
+        try:
+            self._setValues()
+            print_info("Se cargaron los datos correctamente")
+        except Exception as e:
+            print_error(f"Ha ocurrido un error al cargar los datos: {e}")
+
+        # Establecimiento de los ángulos min y max de barrido
         try:
             self.setMaxMinAngles(self.angMin, self.angMax)
         except Exception as e:
-            print_error(f"Error estableciendo los angulos: {e}")
+            print_error(f"Error estableciendo los ángulos: {e}")
+
+        # Establecimiento del ángulo zero relativo por defecto
+        try:
+            self.setAbsoluteZero(self.angzeroRel)
+            print_info(f"Se ha establecido el cero en {self.angzeroRel}")
+        except Exception as e:
+            print_error(f"No se ha podido establecer el cero en {self.angzeroRel}: {e}")
 
         # Establecimiento de las velocidades min y max de barrido
         try:
@@ -187,17 +208,32 @@ class Backend(QObject):
         except Exception as e:
             print_error(f"Error estableciendo las velocidades: {e}")
 
+    # ===== Carga de variables para QML =====
+    def chargeVariablesToQml(self):
+        try:
+            self.viewAngles()
+            self.viewSpeeds()
+            self.viewSubstance()
+            self.viewDevice()
+        except Exception as e:
+            print_error(f"Error cargando variables para QML: {e}")
+    
     # ===== Lectura de datos guardados =====
     def _setValues(self):
         p1 = accessData().data
-        # Ángulos de barrido
+        if p1 is None: raise ValueError("No se pudieron cargar los datos de configuración")
+
         self.angMin = p1["angles"]["angMin"]
         self.angMax = p1["angles"]["angMax"]
+        self.angzeroRel = p1["angles"]["angZeroRel"]
         self.velMin = p1["speeds"]["velMin"]
         self.velMax = p1["speeds"]["velMax"]
+        self._adq_device = p1["device"]["name"]
+        self._unites_device = p1["device"]["unites"]
 
         p2 = accessData("substances.json").data
-        # Sustancias
+        if p2 is None: raise ValueError("No se pudieron cargar los datos de sustancias")
+
         subs = p2["data"]
         self.listSubstances = [s["name"] for s in subs]; self.listSubstances.insert(0,"Otra sustancia")
         self.anglesSubstances = [s["spr_angles"] for s in subs]; self.anglesSubstances.insert(0,[0, 0])
@@ -216,7 +252,7 @@ class Backend(QObject):
         return str(self._exports_dir())
 
     # ===== CSV (compat) -> ahora usa sufijo _datageneral =====
-    @Slot('QVariantList')
+    @Slot(list)
     def saveCsv(self, data_list):
         """
         Compatibilidad con QML actual.
@@ -242,7 +278,7 @@ class Backend(QObject):
             print_error(msg)
 
     # ===== CSV crudo explícito (idéntico al anterior; útil para exportAll) =====
-    @Slot('QVariantList')
+    @Slot(list)
     def saveRawDataCsv(self, data_list):
         try:
             out_dir = self._exports_dir()
@@ -264,7 +300,7 @@ class Backend(QObject):
             print_error(msg)
 
     # ===== CSV ángulo vs ciclo =====
-    @Slot('QVariantList', 'QVariantList')
+    @Slot(list, list)
     def saveAngleVsCycleCsv(self, ch1_angles, ch2_angles):
 
         # Guarda serie ángulo vs ciclo:
@@ -296,19 +332,32 @@ class Backend(QObject):
             print_error(msg)
 
     # ===== Conversión Vout -> R_LDR (Ω) =====
-    def _vout_to_rldr(self, vout: float) -> float:
+    def _vout_to_signal(self, vout: float) -> float:
+
         eps = 1e-6
-        vldr = max(min(vout, self._vcc - eps), eps)
-        if self._vldr_to_ildr:
-            # Según tu implementación actual:
-            return vldr / self._r_fixed
+        vol = max(min(vout, self._vcc - eps), eps)
+
+        if self._adq_device == "ldr":
+
+            if self._unites_device == "current":
+                return vol / self._r_fixed_ldr
+            else:
+                return self._r_fixed_ldr * (vol / (self._vcc - vol))
+            
+        elif self._adq_device == "photodiode":
+
+            if self._unites_device == "current":
+                return (self._vcc - vol) / self._r_fixed_pho
+            else:
+                return self._r_fixed_pho * vol / (self._vcc - vol)
+        
         else:
-            return self._r_fixed * (vldr / (self._vcc - vldr))
+            return vol
 
     # ===== Serial =====
     def _open_serial(self):
         port_env = os.environ.get("ESP32_PORT")
-        baud = 115200
+        baud = 921600
 
         candidates = []
         if port_env:
@@ -331,8 +380,8 @@ class Backend(QObject):
                     self.ser.reset_input_buffer()
                     self.ser.reset_output_buffer()
                     try:
-                        self.ser.setDTR(False)
-                        self.ser.setRTS(False)
+                        self.ser.setDTR(False) # type: ignore
+                        self.ser.setRTS(False) # type: ignore
                     except Exception:
                         pass
                 except Exception:
@@ -380,7 +429,7 @@ class Backend(QObject):
                 try:
                     s = line.decode("utf-8", errors="ignore").strip()
                     if s:
-                        #print_info(f"SER RX <- {s}")
+                        # print_info(f"SER RX <- {s}")
                         pass
                 except Exception:
                     continue
@@ -416,14 +465,24 @@ class Backend(QObject):
     # ===== Slots de control =====
     @Slot()
     def setRelativeZero(self):
-        self._send_serial("ZC\n")
+        try:
+            #self._send_serial("ZC\n")
+            n_ang_zero = self.angzeroRel + self._last_rel - 360*math.floor((self.angzeroRel + self._last_rel)/360)
+            self._send_serial(f"Z{n_ang_zero:.2f}\n")
+            print(self._last_abs, self._last_rel, n_ang_zero)
+            # Actualización del cero relativo para el cálculo interno
+            accessData().changeZeroRel(n_ang_zero)
+        except Exception as e:
+            print_error(f"Error actualizando cero relativo: {e}")
 
     @Slot(float)
     def setAbsoluteZero(self, abs_deg: float):
         try:
             self._send_serial(f"Z{float(abs_deg):.2f}\n")
-        except Exception:
-            pass
+            # Actualización del cero relativo para el cálculo interno
+            accessData().changeZeroRel(abs_deg)
+        except Exception as e:
+            print_error(f"Error actualizando cero absoluto: {e}")
 
     @Slot(bool)
     def setActive(self, on: bool):
@@ -464,6 +523,10 @@ class Backend(QObject):
         self.speedMaxMin.emit(self.velMin, self.velMax)
 
     @Slot()
+    def viewDevice(self):
+        self.adqDeviceChanged.emit(self._adq_device, self._unites_device)
+
+    @Slot()
     def viewSubstance(self):
         self.substanceAct.emit(self.listSubstances, self.anglesSubstances, self.substance)
 
@@ -500,10 +563,18 @@ class Backend(QObject):
         m.ChangeSpeeds([vMin, vMax])
         
         print_info(f"Velocidades actualizadas: Min={self.velMin}, Max={self.velMax}")
+
+    @Slot(str)
+    def setAdqDevice(self, device: str):
+        if device not in ["ldr", "photodetector"]:
+            print_warning(f"Dispositivo de adquisición desconocido: {device}")
+            return
+        self._adq_device = device
+        print_info(f"Dispositivo de adquisición establecido a: {device}")
     
     def isActive(self) -> bool:
         return self._active
-
+    
     # ===== Adquisición periódica =====
     def _on_timeout(self):
         self._t += self._dt
@@ -517,12 +588,15 @@ class Backend(QObject):
                 ch1_voltage = float("nan")
                 ch2_voltage = float("nan")
         else :
-            self._sim_phase += self._dt
-            self._sim_phase2 += self._dt
-            ch1_voltage = 1.65 + math.sin(self._sim_phase * 2 * math.pi / 2.0) * 1.0
-            ch2_voltage = 1.65 + math.sin(self._sim_phase2 * 2 * math.pi / 2.5) * 0.8
-
             if not production_mode:
+                # Generacion de datos simulados para desarrollo sin hardware
+                self._sim_phase += self._dt
+                self._sim_phase2 += self._dt
+
+                # Asignación de lecturas simuladas con oscilaciones senoidales
+                ch1_voltage = 1.65 + math.sin(self._sim_phase * 2 * math.pi / 2.0) * 1.0
+                ch2_voltage = 1.65 + math.sin(self._sim_phase2 * 2 * math.pi / 2.5) * 0.8
+
                 # Asignacion de valores de angulo relativo y absoluto
                 self._last_rel = self._angRelaTest
                 self._last_abs = self._last_rel
@@ -534,14 +608,14 @@ class Backend(QObject):
                     self._angRelaTest += self._advance
 
 
-        ch1_res = self._vout_to_rldr(ch1_voltage) if math.isfinite(ch1_voltage) else float("nan")
-        ch2_res = self._vout_to_rldr(ch2_voltage) if math.isfinite(ch2_voltage) else float("nan")
+        ch1_res = self._vout_to_signal(ch1_voltage) if math.isfinite(ch1_voltage) else float("nan")
+        ch2_res = self._vout_to_signal(ch2_voltage) if math.isfinite(ch2_voltage) else float("nan")
         #print_info(f"ch1_res_current: {ch1_res}, ch2_res_current: {ch2_res}")
 
-        # emitir
+        # emitir datos a QML
         self.newLDRSample.emit(self._t, ch1_res, ch2_res)
         self.newLDRSampleWithAngle.emit(self._t, ch1_res, ch2_res, self._last_abs, self._last_rel)
-
+        
 
 def main():
     app = QGuiApplication(sys.argv)
@@ -557,6 +631,7 @@ def main():
                 print_info("LED apagado (salida)")
         except Exception as e:
             print_error(f"Advertencia: no se pudo apagar LED al salir: {e}")
+
     app.aboutToQuit.connect(_cleanup)
     
     qml_path = Path(__file__).parent / "ui" / "LDRMonitor_maximo_b.qml"
@@ -567,6 +642,8 @@ def main():
     if not engine.rootObjects():
         print_error("Error: No se pudo cargar la interfaz QML")
         sys.exit(1)
+
+    backend.chargeVariablesToQml()
 
     print_info("Aplicación iniciada. Use los controles en pantalla para activar/desactivar.")
     print_info("Presione Ctrl+C o use el botón 'Salir' para terminar.")

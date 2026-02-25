@@ -33,10 +33,16 @@ ApplicationWindow {
     property real  angleRel: NaN
 
     // Vista
-    property string viewMode: "curve"       // "curve" | "cycles" 
+    property string viewMode: "curve"           // "curve" | "cycles"
+
+    // Dispositivo usado para realizar la lectura del laser
+    property string device: "unknown"           // "ldr" | "photodetector" | "unknown"
+
+    // Modo de lectura de voltaje
+    property string unites_device: "current"    // "current" | "resistance"
 
     // Rango X (solo tramo de interés)
-    property real xMinDeg: 0.0  //--
+    property real xMinDeg: 0.0  
     property real xMaxDeg: 0.0
 
     // Limites fijos mecanismo
@@ -74,7 +80,7 @@ ApplicationWindow {
     property var globalAngleHistory: ({})
 
     // Ventana de ciclos para la mediana-de-medianas
-    property int  medWindowCycles: 1      //5, quiero pasar de 5 para 1  
+    property int  medWindowCycles: 5      //5, quiero pasar de 5 para 1  
     property int  minCycleSamples: 5      // mínimo de muestras válidas en un ciclo
     property int  angleKeyDecimals: 2
 
@@ -85,9 +91,15 @@ ApplicationWindow {
 
     // Labels de máximos (de la curva agregada actual)
     property real maxCh1Angle: NaN
-    property real maxCh1Value_mA: NaN
+    property real maxCh1Value: NaN
     property real maxCh2Angle: NaN
-    property real maxCh2Value_mA: NaN
+    property real maxCh2Value: NaN
+
+    // Labels de mínimos (de la curva agregada actual)
+    property real minCh1Angle: NaN
+    property real minCh1Value: NaN
+    property real minCh2Angle: NaN
+    property real minCh2Value: NaN      
 
     // ======== Robustez de ida/vuelta ========
     property real hysteresisDeg: 0.01   // ° extra sobre epsAngle para ignorar jitter
@@ -123,8 +135,8 @@ ApplicationWindow {
         if (histArr.length > N) histArr.splice(0, histArr.length - N);
     }
 
-    // === devuelve la MEDIANA-DE-MEDIANAS (mA) para un ángulo y canal ===
-    function getMoM_mA(key, channel) {
+    // === devuelve la MEDIANA-DE-MEDIANAS para un ángulo y canal ===
+    function getMoM(key, channel) {
         const g = win.globalAngleHistory[key]; // {angle, ch1Meds:[], ch2Meds:[]}
         if (!g) return NaN;
         const src = (channel === 1) ? g.ch1Meds : g.ch2Meds;
@@ -133,7 +145,17 @@ ApplicationWindow {
             const arrStr = src.map(v => (v*1000).toFixed(5));
             //console.log(`[MoM] key=${key}° ch${channel} base(mA)[${src.length}]=[${arrStr.join(", ")}]`);
         }
-        return _median(src)/1000; // a Kohms
+        if (win.unites_device === "resistance") { return _median(src)/1000; } // a Kohms
+        else if (win.unites_device === "current") {return _median(src)*1000;} // a mA
+    }
+
+    function filterEMA(arr, alpha) {
+        if (!arr || arr.length === 0) return NaN;
+        let ema = arr[0];
+        for (let i = 1; i < arr.length; i++) {
+            ema = alpha * arr[i] + (1 - alpha) * ema;
+        }
+        return ema;
     }
 
     // === recomputa labels de MÁXIMOS desde la curva agregada actual ===
@@ -147,15 +169,36 @@ ApplicationWindow {
             const a = parseFloat(k);
             if (a < win.xMinDeg || a > win.xMaxDeg) continue;
 
-            const m1 = getMoM_mA(k, 1);
-            const m2 = getMoM_mA(k, 2);
+            const m1 = getMoM(k, 1);
+            const m2 = getMoM(k, 2);
             if (isFinite(m1) && m1 > best1.val) { best1.val = m1; best1.angle = a; }
             if (isFinite(m2) && m2 > best2.val) { best2.val = m2; best2.angle = a; }
         }
         win.maxCh1Angle    = best1.angle;
-        win.maxCh1Value_mA = (isFinite(best1.val) ? best1.val : NaN);
+        win.maxCh1Value = (isFinite(best1.val) ? best1.val : NaN);
         win.maxCh2Angle    = best2.angle;
-        win.maxCh2Value_mA = (isFinite(best2.val) ? best2.val : NaN);
+        win.maxCh2Value = (isFinite(best2.val) ? best2.val : NaN);
+    }
+
+    function updateMinLabelsFromMoM() {
+        let best1 = {angle: NaN, val: Infinity};
+        let best2 = {angle: NaN, val: Infinity};
+
+        const keys = Object.keys(win.globalAngleHistory).sort((a,b)=>parseFloat(a)-parseFloat(b));
+        for (let i=0;i<keys.length;i++){
+            const k = keys[i];
+            const a = parseFloat(k);
+            if (a < win.xMinDeg || a > win.xMaxDeg) continue;
+
+            const m1 = getMoM(k, 1);
+            const m2 = getMoM(k, 2);
+            if (isFinite(m1) && m1 < best1.val) { best1.val = m1; best1.angle = a; }
+            if (isFinite(m2) && m2 < best2.val) { best2.val = m2; best2.angle = a; }
+        }
+        win.minCh1Angle    = best1.angle;
+        win.minCh1Value = (isFinite(best1.val) ? best1.val : NaN);
+        win.minCh2Angle    = best2.angle;
+        win.minCh2Value = (isFinite(best2.val) ? best2.val : NaN);
     }
 
     function resetValues(){
@@ -198,8 +241,15 @@ ApplicationWindow {
         for (let i=0; i<keys.length; i++){
             const k = keys[i];
             const b = win.cycleBuckets[k];
-            const med1 = _median(b.ch1Vals);
-            const med2 = _median(b.ch2Vals);
+
+            // Aplicacion del filtro de media
+            // const med1 = _median(b.ch1Vals);
+            // const med2 = _median(b.ch2Vals);
+            
+            // Aplicar filtro EMA
+            const med1 = filterEMA(b.ch1Vals, 0.3);
+            const med2 = filterEMA(b.ch2Vals, 0.3);
+
 
             if (isFinite(med1) && med1 > cycleMax1.valA) { cycleMax1.valA = med1; cycleMax1.angle = b.angle; }
             if (isFinite(med2) && med2 > cycleMax2.valA) { cycleMax2.valA = med2; cycleMax2.angle = b.angle; }
@@ -224,8 +274,8 @@ ApplicationWindow {
                 const a = parseFloat(k);
                 if (a < win.xMinDeg || a > win.xMaxDeg) continue;
 
-                const m1 = getMoM_mA(k, 1);
-                const m2 = getMoM_mA(k, 2);
+                const m1 = getMoM(k, 1);
+                const m2 = getMoM(k, 2);
                 if (isFinite(m1) && m1 > plotMax1.val_mA) { plotMax1.val_mA = m1; plotMax1.angle = a; }
                 if (isFinite(m2) && m2 > plotMax2.val_mA) { plotMax2.val_mA = m2; plotMax2.angle = a; }
             }
@@ -243,7 +293,11 @@ ApplicationWindow {
         }
 
         // 5) actualizar labels desde la curva agregada (MoM)
-        updateMaxLabelsFromMoM();
+        if (win.unites_device === "resistance") {
+            updateMaxLabelsFromMoM();
+        } else if (win.unites_device === "current") {
+            updateMinLabelsFromMoM();
+        }
 
         // 6) repintar
         plot.requestPaint();
@@ -334,7 +388,7 @@ ApplicationWindow {
                     }
                     Layout.preferredHeight: 36; Layout.preferredWidth: 120; font.pixelSize: 14
                     ToolTip.visible: hovered
-                    ToolTip.text: "Alterna entre Curva (Ángulo vs Resistencia) y Ciclos (máximos)"
+                    ToolTip.text: "Alterna entre Curva (Ángulo vs Resistencia) y Ciclos (máximos/ mínimos)"
                 }
 
                 Switch { checked: win.active; onToggled: backend.setActive(checked) }
@@ -356,7 +410,7 @@ ApplicationWindow {
         }
 
 
-        // ===== Panel de lecturas (kΩ) =====
+        // ===== Panel de lecturas (kΩ | mA) =====
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 100
@@ -368,13 +422,28 @@ ApplicationWindow {
                 anchors.fill: parent; anchors.margins: 16; spacing: 32
                 // CH1 (corriente es * 1000 y resistencia es entre 1000)
                 ColumnLayout {
-                    Label { text: "CH1 Resistencia (kΩ)"; color: "#22c55e"; font.pixelSize: 14; font.bold: true }
-                    Label { text: isFinite(ch1) ? (ch1/1000).toFixed(2) : "—"; color: "white"; font.pixelSize: 32; font.bold: true }
+                    Label { 
+                        text: unites_device === "resistance" ? "CH1 Resistencia (kΩ)": "CH1 Corriente (mA)";
+                        color: "#22c55e";
+                        font.pixelSize: 14;
+                        font.bold: true
+                    }
+                    Label {
+                        text: isFinite(ch1) ? (unites_device === "resistance" ? (ch1/1000).toFixed(2) : ch1.toFixed(2)*1000) : "—";
+                        color: "white";
+                        font.pixelSize: 32;
+                        font.bold: true 
+                    }
                 }
                 // CH2 (corriente es * 1000 y resistencia es entre 1000)
                 ColumnLayout {
-                    Label { text: "CH2 Resistencia (kΩ)"; color: "#60a5fa"; font.pixelSize: 14; font.bold: true }
-                    Label { text: isFinite(ch2) ? (ch2/1000).toFixed(2) : "—"; color: "white"; font.pixelSize: 32; font.bold: true }
+                    Label {
+                        text: unites_device === "resistance" ? "CH2 Resistencia (kΩ)": "CH2 Corriente (mA)";
+                        color: "#60a5fa";
+                        font.pixelSize: 14;
+                        font.bold: true
+                    }
+                    Label { text: isFinite(ch2) ? (unites_device === "resistance" ? (ch2/1000).toFixed(2) : ch2.toFixed(2)*1000) : "—"; color: "white"; font.pixelSize: 32; font.bold: true }
                 }
                 ColumnLayout {
                     Label { text: "Ángulo (°)"; color: "#f472b6"; font.pixelSize: 14; font.bold: true }
@@ -425,8 +494,8 @@ ApplicationWindow {
                             win.cycleMaxCh1Angles = []
                             win.cycleMaxCh2Angles = []
                             win.cycleIndex = 0
-                            win.maxCh1Angle = NaN; win.maxCh1Value_mA = NaN
-                            win.maxCh2Angle = NaN; win.maxCh2Value_mA = NaN
+                            win.maxCh1Angle = NaN; win.maxCh1Value_ = NaN
+                            win.maxCh2Angle = NaN; win.maxCh2Value = NaN
 
                             win.incStreak = 0; win.decStreak = 0
                             win.sawStartGate = false; win.sawEndGate = false
@@ -448,7 +517,7 @@ ApplicationWindow {
             color: "#111827"
             border.color: "#1f2937"; border.width: 1
 
-            // ---- Resistencia (kΩ) vs Ángulo (°) ----
+            // ---- Resistencia (kΩ) | Corrriente (mA) vs Ángulo (°) ----
             Canvas {
                 id: plot
                 visible: win.viewMode === "curve"
@@ -473,8 +542,13 @@ ApplicationWindow {
                     ctx.textAlign="center";
                     ctx.fillText("Ángulo (°)", ml+pw/2, H);
                     ctx.save(); ctx.translate(10, mt+ph/2+30); ctx.rotate(-Math.PI/2);
-                    ctx.fillText("Resistencia (kΩ)", 0, 0); ctx.restore();
 
+                    if (win.unites_device === "resistance"){
+                        ctx.fillText("Resistencia (kΩ)", 0, 0); ctx.restore();
+                    } else if (win.unites_device === "current"){
+                        ctx.fillText("Corriente (mA)", 0, 0); ctx.restore();
+                    }
+                    
                     const xmin=win.xMinDeg, xmax=win.xMaxDeg;
                     const xspan=Math.max(1e-9,xmax-xmin);
                     const xMap=(vx)=> ml + ((vx-xmin)/xspan)*pw;
@@ -486,8 +560,8 @@ ApplicationWindow {
                     for (let i=0;i<keys.length;i++){
                         const k=keys[i]; const a=parseFloat(k);
                         if (a<xmin||a>xmax) continue;
-                        const ch1_kohm = getMoM_mA(k,1);
-                        const ch2_kohm = getMoM_mA(k,2);
+                        const ch1_kohm = getMoM(k,1);
+                        const ch2_kohm = getMoM(k,2);
                         if (!isFinite(ch1_kohm) && !isFinite(ch2_kohm)) continue;
                         dataArr.push({angle:a, ch1_kohm:ch1_kohm, ch2_kohm:ch2_kohm});
                     }
@@ -645,17 +719,39 @@ ApplicationWindow {
                 anchors.fill: parent; anchors.margins: 16; spacing: 32
 
                 ColumnLayout {
-                    Label { text: "Máximo CH1 (curva agregada)"; color: "#22c55e"; font.pixelSize: 14; font.bold: true }
                     Label {
-                        text: (isFinite(maxCh1Angle) && isFinite(maxCh1Value_mA)) ? `Ángulo: ${maxCh1Angle.toFixed(2)}° — Resistencia: ${maxCh1Value_mA.toFixed(4)} kΩ` : "—"
-                        color: "white"; font.pixelSize: 18; font.bold: true
+                        text: (unites_device === "resistance") ? "Máximo CH1 (curva agregada)" : "Mínimo CH1 (curva agregada)";
+                        color: "#22c55e";
+                        font.pixelSize: 14;
+                        font.bold: true 
+                    }
+                    Label {
+                        text: if (unites_device === "resistance") {
+                                (isFinite(maxCh1Angle) && isFinite(maxCh1Value)) ? `Ángulo: ${maxCh1Angle.toFixed(2)}° — Resistencia: ${maxCh1Value.toFixed(4)} kΩ` : "—"
+                            } else if (unites_device === "current") {
+                                (isFinite(minCh1Angle) && isFinite(minCh1Value)) ? `Ángulo: ${minCh1Angle.toFixed(2)}° — Corriente: ${minCh1Value.toFixed(4)} mA` : "—"
+                            }
+                        color: "white";
+                        font.pixelSize: 18;
+                        font.bold: true
                     }
                 }
                 ColumnLayout {
-                    Label { text: "Máximo CH2 (curva agregada)"; color: "#60a5fa"; font.pixelSize: 14; font.bold: true }
+                    Label { 
+                        text: (unites_device === "resistance") ? "Máximo CH2 (curva agregada)" : "Mínimo CH2 (curva agregada)";
+                        color: "#60a5fa";
+                        font.pixelSize: 14;
+                        font.bold: true 
+                    }
                     Label {
-                        text: (isFinite(maxCh2Angle) && isFinite(maxCh2Value_mA)) ? `Ángulo: ${maxCh2Angle.toFixed(2)}° — Resistencia: ${maxCh2Value_mA.toFixed(4)} kΩ` : "—"
-                        color: "white"; font.pixelSize: 18; font.bold: true
+                        text: if (unites_device === "resistance") {
+                                (isFinite(maxCh2Angle) && isFinite(maxCh2Value)) ? `Ángulo: ${maxCh2Angle.toFixed(2)}° — Resistencia: ${maxCh2Value.toFixed(4)} kΩ` : "—"
+                            } else if (unites_device === "current") {
+                                (isFinite(minCh2Angle) && isFinite(minCh2Value)) ? `Ángulo: ${minCh2Angle.toFixed(2)}° — Corriente: ${minCh2Value.toFixed(4)} mA` : "—"
+                            }
+                        color: "white"; 
+                        font.pixelSize: 18; 
+                        font.bold: true
                     }
                 }
                 ColumnLayout{
@@ -800,8 +896,8 @@ ApplicationWindow {
         function onAngleMaxMin(angMin, angMax) {
             win.forwardStartDeg = angMin;
             win.forwardEndDeg   = angMax;
-            xMinDeg = win.forwardStartDeg - 1;
-            xMaxDeg = win.forwardEndDeg + 1;
+            win.xMinDeg = win.forwardStartDeg - 1;
+            win.xMaxDeg = win.forwardEndDeg + 1;
         }
 
         function onSpeedMaxMin(vMin, vMax) {
@@ -814,10 +910,12 @@ ApplicationWindow {
             win.anglesSubstances = list_angles;
             win.substance = subs;
         }
-    }
 
+        function onAdqDeviceChanged(device, unites) {
+            win.device = device;
+            win.unites_device = unites;
+        }
+    }
     // Compatibilidad con pantallas antiguas
     // Connections { target: backend; function onNewSample(tt, v0, v1) { win.ch1 = v0; win.ch2 = v1; } }
 }
-
-
