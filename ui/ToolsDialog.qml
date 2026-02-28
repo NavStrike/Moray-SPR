@@ -9,7 +9,7 @@ Dialog {
     title: "Herramientas adicionales"
     modal: true
     width: 800
-    height: 300
+    height: 450
     padding: 20
 
     // Evita visivilidad del encabezado
@@ -89,11 +89,63 @@ Dialog {
                     enabled: !win.active
                     onClicked: {
                         win.device = win.device === "ldr" ? "photodetector" : "ldr";
+                        win.deviceUnites = win.device === "ldr" ? "resistance" : "current";
+                        win.update();
                         backend.setAdqDevice(win.device);
                     }
                     Layout.preferredHeight: 36
                     Layout.preferredWidth: 160
                     font.pixelSize: 14
+                }
+            }
+
+            RowLayout{
+                Layout.fillWidth: true
+                spacing: 5
+
+                Label{
+                    text: "Guardar datos adquiridos: "
+                    color: "white" 
+                    font.bold: true; font.pixelSize: 20
+                } 
+                Button {
+                    text: "Guardar datos" 
+                    enabled: !win.active
+                    onClicked: {
+                        backend.saveRawDataCsv();
+                    }
+                    Layout.preferredHeight: 36
+                    Layout.preferredWidth: 160
+                    font.pixelSize: 14
+                }
+
+            }
+
+            RowLayout{
+                Layout.fillWidth: true
+                spacing: 5
+
+                Label{
+                    text: "Nombre:"
+                    color: "white" 
+                    font.bold: true; font.pixelSize: 20
+                     Layout.preferredHeight: 50
+                }
+
+                TextField {
+                    id: nameFile
+                    text: ""
+                    font.pixelSize: 20
+                    Layout.preferredWidth: 150
+                    Layout.preferredHeight: 50
+
+                }
+
+                Label{
+                    text: ".csv:"
+                    color: "white"
+                    font.bold: true; font.pixelSize: 20
+                    Layout.preferredHeight: 50
                 }
             }
                 
@@ -102,7 +154,7 @@ Dialog {
                 spacing: 10
 
                 Button1 {
-                    text: "Cancelar"
+                    text: "Salir"
                     //font.pixelSize: 14
                     Layout.fillWidth: true
                     Layout.preferredHeight: 50
@@ -117,7 +169,6 @@ Dialog {
                     onClicked: winTools.accept()
                 }
             }
-
         }
     }
 }

@@ -172,11 +172,8 @@ Dialog {
                 Button1 {text: "2"; onClicked: {addNumber(2)}}
                 Button1 {text: "3"; onClicked: {addNumber(3)}}
                 Button1 {text: "0"; onClicked: {addNumber(0)}}
-                Button1 {text: "Borrar"; onClicked: {activeInput.text = ""; activeInput.color = "black"} 
-                    Layout.columnSpan: 2
-                    Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
-                    Layout.preferredWidth: 168
-                }
+                Button1 {text: "."; onClicked: {addNumber(".")}}
+                Button1 {text: "Borrar"; onClicked: {activeInput.text = ""; activeInput.color = "black"} }
             }     
         }
     }
@@ -186,6 +183,8 @@ Dialog {
         backend.setMaxMinAngles(anguloMin.text, anguloMax.text)
         win.forwardStartDeg = anguloMin.text
         win.forwardEndDeg = anguloMax.text
+        win.xMinDeg = win.forwardStartDeg - 1;
+        win.xMaxDeg = win.forwardEndDeg + 1;
         console.log("Angle min:", win.forwardStartDeg)
         console.log("Angle max:", win.forwardEndDeg)
     }
@@ -196,9 +195,13 @@ Dialog {
     }
 
     function addNumber (num){
-        let newValue = activeInput.text + num
-        if (Number(newValue) <= 90){activeInput.text = newValue}
-
+        // No se agregan puntos si ya hay uno en el número o no hay otro numero antes del punto
+        if (num === "." && activeInput.text.includes(".") || num === "." && activeInput.text === "") return
+        // Se agrega el nuevo caracter al texto actual
+        let newValue = activeInput.text + num;
+        // Se actualiza el texto del campo solo si el nuevo valor es menor o igual a 90
+        if (Number(newValue) <= 90 || num === "."){activeInput.text = newValue}
+        // Se cambia el color del texto (rojo) si el nuevo valor es menor que el límite inferior o mayor que el límite superior
         if (Number(newValue) <= downLimit || Number(newValue) >= upLimit){activeInput.color = 'red'}
         else {activeInput.color = "black"}
     }

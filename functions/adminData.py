@@ -35,19 +35,24 @@ class accessData():
 
     def changeAngles(self, new_angles):
         #Actualiza solo los ángulos
-        self.data["angles"]["angMin"] = new_angles[0]
-        self.data["angles"]["angMax"] = new_angles[1]
+        self.data["angles"]["angMin"] = new_angles[0] # type: ignore
+        self.data["angles"]["angMax"] = new_angles[1] # type: ignore
         self.update()
 
     def changeZeroRel(self, new_zero):
         #Actualiza solo el cero relativo
-        self.data["angles"]["angZeroRel"] = new_zero
+        self.data["angles"]["angZeroRel"] = new_zero # type: ignore
         self.update()
     
     def ChangeSpeeds(self, newSpeeds):
         #Actualiza solo los ángulos
-        self.data["speeds"]["velMin"] = newSpeeds[0]
-        self.data["speeds"]["velMax"] = newSpeeds[1]
+        self.data["speeds"]["velMin"] = newSpeeds[0] # type: ignore
+        self.data["speeds"]["velMax"] = newSpeeds[1] # type: ignore
+        self.update()
+    
+    def ChangeAdqDevice(self, device, deviceUnites):
+        self.data["device"]["name"] = device  # type: ignore
+        self.data["device"]["unites"] = deviceUnites  # type: ignore  
         self.update()
 
 class accessCsv():

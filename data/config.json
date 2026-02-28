@@ -14,7 +14,11 @@
         "velMax": 5.0
     },
     "device": {
-        "name": "photodetector",
-        "unites": "current"
+        "name": "ldr",
+        "unites": "resistance"
+    },
+    "saveData": {
+        "name": null,
+        "path": "exports"
     }
 }

@@ -4,7 +4,6 @@ import QtQuick.Controls 6.0
 import QtQuick.Layouts 6.0
 import QtQuick.Window 6.0
 import QtQuick.Dialogs 6.0
-// import QtQuick.Controls.Material 6.0
 
 // ===== LDR Monitor =====
 ApplicationWindow {
@@ -24,22 +23,22 @@ ApplicationWindow {
     ToolsDialog {id: winTools}
 
     // ===== Estado / datos =====
-    property bool  active: false
-    property bool  debugLogs: true
-    property real  ch1: 0.0                 // A (desde backend)
-    property real  ch2: 0.0                 // A (desde backend)
-    property var   data: []                 // crudo -> CSV {angle:°, ch1:A, ch2:A}
-    property real  angleAbs: NaN
-    property real  angleRel: NaN
+    property bool active: false
+    property bool debugLogs: true
+    property string realTime: NaN                 // Tiempo real
+    property real measurementTime: 0.0      // Tiempo de medida
+    property real ch1: 0.0                  // Lectura de canal 1
+    property real ch2: 0.0                  // Lectura de canal 2
+    property real angleAbs: NaN             // Lectura de angulo absoluto
+    property real angleRel: NaN             // Lectura de angulo relativo
+    property var  data: []                  // crudo -> CSV {angle:°, ch1:<value>, ch2:<value>}
 
     // Vista
     property string viewMode: "curve"           // "curve" | "cycles"
 
     // Dispositivo usado para realizar la lectura del laser
     property string device: "unknown"           // "ldr" | "photodetector" | "unknown"
-
-    // Modo de lectura de voltaje
-    property string unites_device: "current"    // "current" | "resistance"
+    property string deviceUnites: "current"    // "current" | "resistance"
 
     // Rango X (solo tramo de interés)
     property real xMinDeg: 0.0  
@@ -50,9 +49,10 @@ ApplicationWindow {
     // Limite movimiento
     property real upLimit: 85
     property real downLimit: 15
+
     // Limite de velocidad
     property real upLimitVel: 40
-    property real downLimitVel: 1
+    property real downLimitVel: 0.1
 
     // Velocidades minima y maxima
     property real velMinCycle: 0
@@ -63,6 +63,11 @@ ApplicationWindow {
     property  var anglesSubstances: []
     property string substance: ""
 
+    // Fitros
+    property string filterType: "ema"   // "median" | "ema"
+    property real emaAlpha: 0.15        // factor de suavizado para EMA (0-1)
+    property int  kernelMed: 5          // tamaño del kernel para mediana
+
     // Detección de ida forwardStartDeg → forwardEndDeg
     property real forwardStartDeg: 0
     property real forwardEndDeg:   0
@@ -71,35 +76,33 @@ ApplicationWindow {
     property bool collectingForward: false
     property bool pendingCycleSnapshot: false
 
-    // Acumulación del ciclo actual (muestras crudas por ángulo)
-    // key -> {angle, ch1Vals:[], ch2Vals:[]}
-    property var cycleBuckets: ({})
+    // Acumulación del ciclo actual
+    // [{angle:°, ch1:<value>, ch2:<value>}, ...]
+    property var dataCycle: []
 
-    // Historial GLOBAL por ángulo: últimas N medianas de ciclos
-    // key -> {angle, ch1Meds:[], ch2Meds:[]}
-    property var globalAngleHistory: ({})
+    // Acumulación del ciclo actual con filtro (Data para graficar)
+    // {angle:[], ch1:[], ch2:[]}
+    property var dataCycleFilter: []
 
-    // Ventana de ciclos para la mediana-de-medianas
-    property int  medWindowCycles: 5      //5, quiero pasar de 5 para 1  
+    // Parametros de ciclo
     property int  minCycleSamples: 5      // mínimo de muestras válidas en un ciclo
     property int  angleKeyDecimals: 2
 
-    // Serie para "ángulo máximo vs nº de ciclo"
-    property var cycleMaxCh1Angles: []
-    property var cycleMaxCh2Angles: []
+    // Serie para "ángulo máximo o mínimo vs nº de ciclo"
+    property var cyclePeakCh1Angles: []
+    property var cyclePeakCh1Times: []
+    property var cyclePeakCh2Angles: []
+    property var cyclePeakCh2Times: []
     property int cycleIndex: 0
 
-    // Labels de máximos (de la curva agregada actual)
-    property real maxCh1Angle: NaN
-    property real maxCh1Value: NaN
-    property real maxCh2Angle: NaN
-    property real maxCh2Value: NaN
-
-    // Labels de mínimos (de la curva agregada actual)
-    property real minCh1Angle: NaN
-    property real minCh1Value: NaN
-    property real minCh2Angle: NaN
-    property real minCh2Value: NaN      
+    // Labels de los picos (peaks) de la curva agregada actual
+    // Format -> [Angle, Value, Time]
+    property real peakCh1Angle: NaN
+    property real peakCh1Value: NaN
+    property real peakCh1Time: NaN
+    property real peakCh2Angle: NaN
+    property real peakCh2Value: NaN
+    property real peakCh2Time: NaN
 
     // ======== Robustez de ida/vuelta ========
     property real hysteresisDeg: 0.01   // ° extra sobre epsAngle para ignorar jitter
@@ -121,88 +124,105 @@ ApplicationWindow {
     // ===== Variables de prueba =====
 
     // === helpers estadísticos ===
-    function _median(arr) {
+    // Filtro de mediana
+    function _median(arr, kernelSize) {
         if (!arr || arr.length === 0) return NaN;
-        const c = arr.slice().sort((x,y)=>x-y);
-        const m = Math.floor(c.length/2);
-        return (c.length % 2) ? c[m] : 0.5*(c[m-1] + c[m]);
-    }
+        const half = Math.floor(kernelSize/2);
+        const result = [];
 
-    // === agrega al historial con ventana deslizante de N ciclos ===
-    function _pushHist(histArr, v, N) {
-        if (!isFinite(v)) return;
-        histArr.push(v);
-        if (histArr.length > N) histArr.splice(0, histArr.length - N);
-    }
-
-    // === devuelve la MEDIANA-DE-MEDIANAS para un ángulo y canal ===
-    function getMoM(key, channel) {
-        const g = win.globalAngleHistory[key]; // {angle, ch1Meds:[], ch2Meds:[]}
-        if (!g) return NaN;
-        const src = (channel === 1) ? g.ch1Meds : g.ch2Meds;
-        if (!src || src.length === 0) return NaN;
-        if (win.debugLogs) {
-            const arrStr = src.map(v => (v*1000).toFixed(5));
-            //console.log(`[MoM] key=${key}° ch${channel} base(mA)[${src.length}]=[${arrStr.join(", ")}]`);
+        for (let i = 0; i < arr.length; i++) {
+            const window = [];
+            for (let j = -half; j <= half; j++) {
+                let index = i + j;
+                if (index < 0) {index = 0;}
+                if (index >= arr.length) {index = arr.length - 1;}
+                window.push(arr[index]);
+            }
+            window.sort((a, b) => a - b);
+            const median = window[Math.floor(window.length / 2)];
+            result.push(median);
         }
-        if (win.unites_device === "resistance") { return _median(src)/1000; } // a Kohms
-        else if (win.unites_device === "current") {return _median(src)*1000;} // a mA
+        return result;
     }
-
-    function filterEMA(arr, alpha) {
+    
+    // Filtro EMA (Media Móvil Exponencial)
+    function _ema(arr, alpha) {
         if (!arr || arr.length === 0) return NaN;
         let ema = arr[0];
+        let result = [ema];
         for (let i = 1; i < arr.length; i++) {
             ema = alpha * arr[i] + (1 - alpha) * ema;
+            result.push(ema);
         }
-        return ema;
+        return result;
     }
 
-    // === recomputa labels de MÁXIMOS desde la curva agregada actual ===
-    function updateMaxLabelsFromMoM() {
-        let best1 = {angle: NaN, val: -Infinity};
-        let best2 = {angle: NaN, val: -Infinity};
+    // Funcion unificada de filtros
+    function applyFilter(arr) {
+        if (!arr || arr.length === 0) return NaN;
 
-        const keys = Object.keys(win.globalAngleHistory).sort((a,b)=>parseFloat(a)-parseFloat(b));
-        for (let i=0;i<keys.length;i++){
-            const k = keys[i];
-            const a = parseFloat(k);
-            if (a < win.xMinDeg || a > win.xMaxDeg) continue;
+        win.dataCycleFilter = [];
 
-            const m1 = getMoM(k, 1);
-            const m2 = getMoM(k, 2);
-            if (isFinite(m1) && m1 > best1.val) { best1.val = m1; best1.angle = a; }
-            if (isFinite(m2) && m2 > best2.val) { best2.val = m2; best2.angle = a; }
+        let arrTime = arr.map(d => d.time);
+        let arrAngle = arr.map(d => d.angle);
+        let arrCh1 = arr.map(d => d.ch1);
+        let arrCh2 = arr.map(d => d.ch2);
+        
+
+        let arrCh1Filter = []; let arrCh2Filter = [];
+
+        if (win.filterType === "median") {
+            arrCh1Filter = _median(arrCh1, win.windowMed);
+            arrCh2Filter = _median(arrCh2, win.windowMed);
+        } else if (win.filterType === "ema") {
+            arrCh1Filter = _ema(arrCh1, win.emaAlpha);
+            arrCh2Filter = _ema(arrCh2, win.emaAlpha);
         }
-        win.maxCh1Angle    = best1.angle;
-        win.maxCh1Value = (isFinite(best1.val) ? best1.val : NaN);
-        win.maxCh2Angle    = best2.angle;
-        win.maxCh2Value = (isFinite(best2.val) ? best2.val : NaN);
+        for (let i = 0; i < arr.length; i++) {
+            dataCycleFilter.push({time: arrTime[i], angle: arrAngle[i], ch1: arrCh1Filter[i], ch2: arrCh2Filter[i]});
+        }
     }
 
-    function updateMinLabelsFromMoM() {
-        let best1 = {angle: NaN, val: Infinity};
-        let best2 = {angle: NaN, val: Infinity};
+    // === adquiere labels de MÁXIMOS desde la curva actual ===
+    function updatePeakLabelsFromDataFilter() {
+        let valCh1 = dataCycleFilter.map(d => d.ch1); let valCh2 = dataCycleFilter.map(d => d.ch2);
 
-        const keys = Object.keys(win.globalAngleHistory).sort((a,b)=>parseFloat(a)-parseFloat(b));
-        for (let i=0;i<keys.length;i++){
-            const k = keys[i];
-            const a = parseFloat(k);
-            if (a < win.xMinDeg || a > win.xMaxDeg) continue;
+        let best1 = {time: NaN, angle: NaN, val: -Infinity};
+        let best2 = {time: NaN, angle: NaN, val: -Infinity};
 
-            const m1 = getMoM(k, 1);
-            const m2 = getMoM(k, 2);
-            if (isFinite(m1) && m1 < best1.val) { best1.val = m1; best1.angle = a; }
-            if (isFinite(m2) && m2 < best2.val) { best2.val = m2; best2.angle = a; }
+        if (win.deviceUnites == "current"){
+            best1.val = Math.min(...valCh1);
+            best2.val = Math.min(...valCh2);
+        } else {
+            best1.val = Math.max(...valCh1);
+            best2.val = Math.max(...valCh2);
         }
-        win.minCh1Angle    = best1.angle;
-        win.minCh1Value = (isFinite(best1.val) ? best1.val : NaN);
-        win.minCh2Angle    = best2.angle;
-        win.minCh2Value = (isFinite(best2.val) ? best2.val : NaN);
+
+        let posBest1 = valCh1.indexOf(best1.val);
+        best1.time = win.dataCycleFilter[posBest1].time;
+        best1.angle = win.dataCycleFilter[posBest1].angle;
+
+        let posBest2 = valCh2.indexOf(best2.val);
+        best2.time = win.dataCycleFilter[posBest2].time;
+        best2.angle = win.dataCycleFilter[posBest2].angle;
+
+        win.peakCh1Time = (isFinite(best1.time) ? best1.time : NaN);
+        win.peakCh1Angle = (isFinite(best1.angle) ? best1.angle : NaN);
+        win.peakCh1Value = (isFinite(best1.val) ? best1.val : NaN);
+        win.cyclePeakCh1Times.push(best1.time);
+        win.cyclePeakCh1Angles.push(best1.angle);
+
+        win.peakCh2Time = (isFinite(best2.time) ? best2.time : NaN);
+        win.peakCh2Angle = (isFinite(best2.angle) ? best2.angle : NaN);
+        win.peakCh2Value = (isFinite(best2.val) ? best2.val : NaN);
+        win.cyclePeakCh2Times.push(best2.time);
+        win.cyclePeakCh2Angles.push(best2.angle);
+
+        console.log(win.peakCh2Time, win.peakCh2Angle, win.peakCh2Value);
     }
 
     function resetValues(){
-        win.cycleBuckets = ({})
+        win.dataCycle = [];
         win.incStreak = 0; win.decStreak = 0
         win.sawStartGate = false; win.sawEndGate = false
         win.minA = 9999.0; win.maxA = -9999.0
@@ -220,84 +240,21 @@ ApplicationWindow {
         }
 
         // 1) validar muestras del ciclo
-        let sampleCount = 0;
-        for (let k in win.cycleBuckets) {
-            const b = win.cycleBuckets[k];
-            sampleCount += (b?.ch1Vals?.length || 0) + (b?.ch2Vals?.length || 0);
-        }
+        let sampleCount = win.dataCycle.length;
         if (sampleCount < win.minCycleSamples) {
             if (win.debugLogs) console.warn("[cycle] descartado por pocas muestras:", sampleCount);
             resetValues()
             return;
         }
 
-        // 2) mediana del ciclo por ángulo (A) y alimentar historial
-        const keys = Object.keys(win.cycleBuckets).sort((a,b)=>parseFloat(a)-parseFloat(b));
-        let firstCycle = (win.cycleIndex === 0);
+        // 2) aplicar filtro
+        applyFilter(win.dataCycle);
 
-        let cycleMax1 = {angle: NaN, valA: -Infinity};
-        let cycleMax2 = {angle: NaN, valA: -Infinity};
+        // 3) actualizar labels desde la curva filtrada
+        updatePeakLabelsFromDataFilter();
 
-        for (let i=0; i<keys.length; i++){
-            const k = keys[i];
-            const b = win.cycleBuckets[k];
-
-            // Aplicacion del filtro de media
-            // const med1 = _median(b.ch1Vals);
-            // const med2 = _median(b.ch2Vals);
-            
-            // Aplicar filtro EMA
-            const med1 = filterEMA(b.ch1Vals, 0.3);
-            const med2 = filterEMA(b.ch2Vals, 0.3);
-
-
-            if (isFinite(med1) && med1 > cycleMax1.valA) { cycleMax1.valA = med1; cycleMax1.angle = b.angle; }
-            if (isFinite(med2) && med2 > cycleMax2.valA) { cycleMax2.valA = med2; cycleMax2.angle = b.angle; }
-
-            let g = win.globalAngleHistory[k];
-            if (!g) { g = { angle: b.angle, ch1Meds: [], ch2Meds: [] }; win.globalAngleHistory[k] = g; }
-            if (isFinite(med1)) _pushHist(g.ch1Meds, med1, win.medWindowCycles);
-            if (isFinite(med2)) _pushHist(g.ch2Meds, med2, win.medWindowCycles);
-        }
-
-        // 3) decidir el punto del gráfico "ángulo vs ciclo"
-        let plotMax1 = {angle: NaN, val_mA: -Infinity};
-        let plotMax2 = {angle: NaN, val_mA: -Infinity};
-
-        if (firstCycle) {
-            if (isFinite(cycleMax1.angle)) { plotMax1.angle = cycleMax1.angle; plotMax1.val_mA = cycleMax1.valA*1000.0; }
-            if (isFinite(cycleMax2.angle)) { plotMax2.angle = cycleMax2.angle; plotMax2.val_mA = cycleMax2.valA*1000.0; }
-        } else {
-            const gkeys = Object.keys(win.globalAngleHistory).sort((a,b)=>parseFloat(a)-parseFloat(b));
-            for (let i=0;i<gkeys.length;i++){
-                const k = gkeys[i];
-                const a = parseFloat(k);
-                if (a < win.xMinDeg || a > win.xMaxDeg) continue;
-
-                const m1 = getMoM(k, 1);
-                const m2 = getMoM(k, 2);
-                if (isFinite(m1) && m1 > plotMax1.val_mA) { plotMax1.val_mA = m1; plotMax1.angle = a; }
-                if (isFinite(m2) && m2 > plotMax2.val_mA) { plotMax2.val_mA = m2; plotMax2.angle = a; }
-            }
-        }
-
-        // 4) agregar punto a series
-        if (isFinite(plotMax1.angle)) win.cycleMaxCh1Angles.push(plotMax1.angle);
-        if (isFinite(plotMax2.angle)) win.cycleMaxCh2Angles.push(plotMax2.angle);
-        win.cycleIndex = Math.max(win.cycleMaxCh1Angles.length, win.cycleMaxCh2Angles.length);
-
-        if (win.debugLogs) {
-            console.log(`[cycle-plot] idx=${win.cycleIndex} -> `
-                        + `CH1=${isFinite(plotMax1.angle)?plotMax1.angle.toFixed(3):"NaN"}°, `
-                        + `CH2=${isFinite(plotMax2.angle)?plotMax2.angle.toFixed(3):"NaN"}°`);
-        }
-
-        // 5) actualizar labels desde la curva agregada (MoM)
-        if (win.unites_device === "resistance") {
-            updateMaxLabelsFromMoM();
-        } else if (win.unites_device === "current") {
-            updateMinLabelsFromMoM();
-        }
+        // 4) Calculamos el número de ciclo actual (el índice del próximo punto a agregar)
+        win.cycleIndex = Math.max(win.cyclePeakCh1Angles.length, win.cyclePeakCh2Angles.length);
 
         // 6) repintar
         plot.requestPaint();
@@ -344,6 +301,13 @@ ApplicationWindow {
                 Rectangle { Layout.fillWidth: true; color: "transparent" }
 
                 Button {
+                    text: "Terminal"
+                    Layout.preferredHeight: 36; Layout.preferredWidth: 120; font.pixelSize: 14
+                    ToolTip.visible: hovered;
+                    ToolTip.text: "Permite la visualización de la terminal"
+                }
+
+                Button {
                     text: "Herramientas"
                     enabled: !win.active
                     Layout.preferredHeight: 36; Layout.preferredWidth: 120; font.pixelSize: 14
@@ -388,7 +352,7 @@ ApplicationWindow {
                     }
                     Layout.preferredHeight: 36; Layout.preferredWidth: 120; font.pixelSize: 14
                     ToolTip.visible: hovered
-                    ToolTip.text: "Alterna entre Curva (Ángulo vs Resistencia) y Ciclos (máximos/ mínimos)"
+                    ToolTip.text: "Alterna entre Curva (Ángulo vs Resistencia) y Ciclos (Picos vs tiempo)"
                 }
 
                 Switch { checked: win.active; onToggled: backend.setActive(checked) }
@@ -420,39 +384,41 @@ ApplicationWindow {
 
             RowLayout {
                 anchors.fill: parent; anchors.margins: 16; spacing: 32
-                // CH1 (corriente es * 1000 y resistencia es entre 1000)
+
                 ColumnLayout {
                     Label { 
-                        text: unites_device === "resistance" ? "CH1 Resistencia (kΩ)": "CH1 Corriente (mA)";
+                        text: deviceUnites === "resistance" ? "CH1 Resistencia (kΩ)": "CH1 Corriente (mA)";
                         color: "#22c55e";
                         font.pixelSize: 14;
                         font.bold: true
                     }
                     Label {
-                        text: isFinite(ch1) ? (unites_device === "resistance" ? (ch1/1000).toFixed(2) : ch1.toFixed(2)*1000) : "—";
+                        text: isFinite(ch1) ? (deviceUnites === "resistance" ? (ch1).toFixed(3) : ch1.toFixed(3)) : "—";
                         color: "white";
                         font.pixelSize: 32;
                         font.bold: true 
                     }
                 }
-                // CH2 (corriente es * 1000 y resistencia es entre 1000)
+
                 ColumnLayout {
                     Label {
-                        text: unites_device === "resistance" ? "CH2 Resistencia (kΩ)": "CH2 Corriente (mA)";
+                        text: deviceUnites === "resistance" ? "CH2 Resistencia (kΩ)": "CH2 Corriente (mA)";
                         color: "#60a5fa";
                         font.pixelSize: 14;
                         font.bold: true
                     }
-                    Label { text: isFinite(ch2) ? (unites_device === "resistance" ? (ch2/1000).toFixed(2) : ch2.toFixed(2)*1000) : "—"; color: "white"; font.pixelSize: 32; font.bold: true }
+                    Label { text: isFinite(ch2) ? (deviceUnites === "resistance" ? (ch2).toFixed(3) : ch2.toFixed(3)) : "—"; color: "white"; font.pixelSize: 32; font.bold: true }
                 }
                 ColumnLayout {
                     Label { text: "Ángulo (°)"; color: "#f472b6"; font.pixelSize: 14; font.bold: true }
-                    Label { text: isFinite(win.angleRel) ? win.angleRel.toFixed(2) : "—"; color: "white"; font.pixelSize: 28; font.bold: true }
+                    Label { text: isFinite(win.angleRel) ? win.angleRel.toFixed(2) : "—"; color: "white"; font.pixelSize: 32; font.bold: true }
                 }
-                //ColumnLayout {
-                    //Label { text: "Ángulo abs (°)"; color: "#fbbf24"; font.pixelSize: 14; font.bold: true }
-                    //Label { text: isFinite(win.angleAbs) ? win.angleAbs.toFixed(2) : "—"; color: "white"; font.pixelSize: 28; font.bold: true }
-                //}
+
+                ColumnLayout {
+                    Label { text:"Tiempo (s)";
+                    color: "#fbbf24"; font.pixelSize: 14; font.bold: true }
+                    Label { text: isFinite(win.measurementTime) ? win.measurementTime.toFixed(2) : "—"; color: "white"; font.pixelSize: 32; font.bold: true }
+                }
 
                 Rectangle { Layout.fillWidth: true; color: "transparent" }
 
@@ -464,7 +430,7 @@ ApplicationWindow {
                             win.prevAngle = NaN
                             win.collectingForward = false
                             win.pendingCycleSnapshot = true
-                            win.cycleBuckets = ({})
+                            win.dataCycle = []
 
                             // reset robustez
                             win.incStreak = 0; win.decStreak = 0
@@ -489,13 +455,15 @@ ApplicationWindow {
                         text: "Limpiar todo"
                         onClicked: {
                             win.data = []
-                            win.cycleBuckets = ({})
-                            win.globalAngleHistory = ({})
-                            win.cycleMaxCh1Angles = []
-                            win.cycleMaxCh2Angles = []
+                            win.dataCycle = []
+                            win.dataCycleFilter = []
+                            win.cyclePeakCh1Angles = []
+                            win.cyclePeakCh1Times = []
+                            win.cyclePeakCh2Angles = []
+                            win.cyclePeakCh2Times = []
                             win.cycleIndex = 0
-                            win.maxCh1Angle = NaN; win.maxCh1Value_ = NaN
-                            win.maxCh2Angle = NaN; win.maxCh2Value = NaN
+                            win.peakCh1Time = NaN; win.peakCh1Angle = NaN; win.peakCh1Value = NaN
+                            win.peakCh2Time = NaN; win.peakCh2Angle = NaN; win.peakCh2alue = NaN
 
                             win.incStreak = 0; win.decStreak = 0
                             win.sawStartGate = false; win.sawEndGate = false
@@ -543,9 +511,9 @@ ApplicationWindow {
                     ctx.fillText("Ángulo (°)", ml+pw/2, H);
                     ctx.save(); ctx.translate(10, mt+ph/2+30); ctx.rotate(-Math.PI/2);
 
-                    if (win.unites_device === "resistance"){
+                    if (win.deviceUnites === "resistance"){
                         ctx.fillText("Resistencia (kΩ)", 0, 0); ctx.restore();
-                    } else if (win.unites_device === "current"){
+                    } else if (win.deviceUnites === "current"){
                         ctx.fillText("Corriente (mA)", 0, 0); ctx.restore();
                     }
                     
@@ -553,20 +521,7 @@ ApplicationWindow {
                     const xspan=Math.max(1e-9,xmax-xmin);
                     const xMap=(vx)=> ml + ((vx-xmin)/xspan)*pw;
 
-                    // construir data desde la mediana-de-medianas
-                    const keys = Object.keys(win.globalAngleHistory).sort((a,b)=>parseFloat(a)-parseFloat(b));
-                    const dataArr=[];
-
-                    for (let i=0;i<keys.length;i++){
-                        const k=keys[i]; const a=parseFloat(k);
-                        if (a<xmin||a>xmax) continue;
-                        const ch1_kohm = getMoM(k,1);
-                        const ch2_kohm = getMoM(k,2);
-                        if (!isFinite(ch1_kohm) && !isFinite(ch2_kohm)) continue;
-                        dataArr.push({angle:a, ch1_kohm:ch1_kohm, ch2_kohm:ch2_kohm});
-                    }
-
-                    if (dataArr.length===0){
+                    if (win.dataCycleFilter.length === 0){
                         ctx.fillStyle="#9ca3af"
                         ctx.textAlign="left";
                         ctx.fillText("Sin datos agregados aún…", ml+10, mt+20);
@@ -575,10 +530,10 @@ ApplicationWindow {
 
                     // eje Y auto
                     let ymin=+Infinity,ymax=-Infinity;
-                    for (let i=0;i<dataArr.length;i++){
-                        const d=dataArr[i];
-                        if (isFinite(d.ch1_kohm)){ymin=Math.min(ymin,d.ch1_kohm); ymax=Math.max(ymax,d.ch1_kohm);}
-                        if (isFinite(d.ch2_kohm)){ymin=Math.min(ymin,d.ch2_kohm); ymax=Math.max(ymax,d.ch2_kohm);}
+                    for (let i=0;i<win.dataCycleFilter.length;i++){
+                        const d=win.dataCycleFilter[i];
+                        if (isFinite(d.ch1)){ymin=Math.min(ymin,d.ch1); ymax=Math.max(ymax,d.ch1);}
+                        if (isFinite(d.ch2)){ymin=Math.min(ymin,d.ch2); ymax=Math.max(ymax,d.ch2);}
                     }
                     if (!(ymin<Infinity&&ymax>-Infinity)){ymin=0;ymax=1;}
                     if (Math.abs(ymax-ymin)<1e-9) ymax=ymin+1.0;
@@ -614,21 +569,21 @@ ApplicationWindow {
                     function drawPolyline(color, acc){
                         ctx.strokeStyle=color; ctx.lineWidth=2; ctx.beginPath();
                         let started=false;
-                        for (let i=0;i<dataArr.length;i++){
-                            const d=dataArr[i]; const v=acc(d); if (!isFinite(v)) continue;
+                        for (let i=0;i<win.dataCycleFilter.length;i++){
+                            const d=win.dataCycleFilter[i]; const v=acc(d); if (!isFinite(v)) continue;
                             const x=xMap(d.angle), y=yMap(v);
                             if(!started){ctx.moveTo(x,y); started=true;} else ctx.lineTo(x,y);
                         }
                         ctx.stroke();
                         ctx.fillStyle=color; const r=2.0;
-                        for (let i=0;i<dataArr.length;i++){
-                            const d=dataArr[i]; const v=acc(d); if (!isFinite(v)) continue;
+                        for (let i=0;i<win.dataCycleFilter.length;i++){
+                            const d=win.dataCycleFilter[i]; const v=acc(d); if (!isFinite(v)) continue;
                             const x=xMap(d.angle), y=yMap(v);
                             ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
                         }
                     }
-                    drawPolyline("#22c55e", d=>d.ch1_kohm);
-                    drawPolyline("#60a5fa", d=>d.ch2_kohm);
+                    drawPolyline("#22c55e", d=>d.ch1);
+                    drawPolyline("#60a5fa", d=>d.ch2);
                 }
             }
 
@@ -651,26 +606,48 @@ ApplicationWindow {
                     ctx.strokeStyle="#1f2937"; ctx.strokeRect(ml,mt,pw,ph);
 
                     ctx.fillStyle="#9ca3af"; ctx.font="12px sans-serif"; ctx.textAlign="center";
-                    ctx.fillText("Número de ciclo", ml+pw/2, H);
+                    ctx.fillText("Tiempo", ml+pw/2, H);
                     ctx.save(); ctx.translate(16, mt+ph/2); ctx.rotate(-Math.PI/2);
                     ctx.fillText("Ángulo del máximo (°)", 0, 0); ctx.restore();
 
-                    const n1=win.cycleMaxCh1Angles.length, n2=win.cycleMaxCh2Angles.length;
-                    const N=Math.max(n1,n2); 
+                    const n1=win.cyclePeakCh1Angles.length, n2=win.cyclePeakCh2Angles.length;
+                    const N=Math.max(n1,n2);
                     
                     if (N===0){
                         ctx.fillStyle="#9ca3af"; ctx.textAlign="left";
                         ctx.fillText("Sin ciclos completados aún…", ml+10, mt+20); return;
                     }
-                    const xmin=1,xmax=Math.max(2,N), xspan=xmax-xmin;
-                    const xMap=(vx)=> ml + ((vx-xmin)/xspan)*pw;
 
+                    // Autoescalado eje X
+                    let xmin=+Infinity,xmax=-Infinity;
+
+                    for (let i=0;i<n1;i++){
+                        const v=win.cyclePeakCh1Times[i];
+                        if (isFinite(v)){xmin=Math.min(xmin,v); xmax=Math.max(xmax,v);}
+                    }
+                    for (let i=0;i<n2;i++){
+                        const v=win.cyclePeakCh2Times[i];
+                        if (isFinite(v)){xmin=Math.min(xmin,v); xmax=Math.max(xmax,v);}
+                    }
+                    
+                    if (Math.abs(xmax-xmin)<1e-6) xmax=xmin+1.0;
+                    const padx=(xmax-xmin)*0.08; xmin-=padx; xmax+=padx;
+                    const xMap = (vx) => ml + ((vx-xmin)/(xmax - xmin))*pw;
+
+                    // Autoescalado eje Y
                     let ymin=+Infinity,ymax=-Infinity;
-                    for (let i=0;i<n1;i++){ const v=win.cycleMaxCh1Angles[i]; if (isFinite(v)){ymin=Math.min(ymin,v); ymax=Math.max(ymax,v);} }
-                    for (let i=0;i<n2;i++){ const v=win.cycleMaxCh2Angles[i]; if (isFinite(v)){ymin=Math.min(ymin,v); ymax=Math.max(ymax,v);} }
-                    if (!(ymin<Infinity&&ymax>-Infinity)) { ymin=win.xMinDeg; ymax=win.xMaxDeg; }
+
+                    for (let i=0;i<n1;i++){
+                        const v=win.cyclePeakCh1Angles[i];
+                        if (isFinite(v)){ymin=Math.min(ymin,v); ymax=Math.max(ymax,v);}
+                    }
+                    for (let i=0;i<n2;i++){
+                        const v=win.cyclePeakCh2Angles[i];
+                        if (isFinite(v)){ymin=Math.min(ymin,v); ymax=Math.max(ymax,v);}
+                    }
+                    if (!(ymin<Infinity && ymax>-Infinity)) { ymin=win.xMinDeg; ymax=win.xMaxDeg;}
                     if (Math.abs(ymax-ymin)<1e-6) ymax=ymin+1.0;
-                    const pad=(ymax-ymin)*0.08; ymin-=pad; ymax+=pad;
+                    const pady=(ymax-ymin)*0.08; ymin-=pady; ymax+=pady;
                     const yMap=(vy)=> mt + ph*(1-(vy-ymin)/(ymax-ymin));
 
                     // grilla
@@ -678,31 +655,37 @@ ApplicationWindow {
                     for (let gy=0; gy<=6; gy++){ const y=mt+ph*(gy/6); ctx.moveTo(ml,y); ctx.lineTo(ml+pw,y); }
                     ctx.stroke();
                     ctx.textAlign="right"; ctx.fillStyle="#9ca3af";
+
                     for (let gy=0; gy<=6; gy++){
                         const vy=ymin+(ymax-ymin)*(gy/6); const y=mt+ph*(1-gy/6);
                         ctx.fillText(vy.toFixed(2), ml-6, y+4);
                     }
-                    ctx.textAlign="center";
-                    const maxTicks=10, step=Math.max(1, Math.floor(N/maxTicks));
-                    for (let c=1; c<=N; c+=step){ const x=xMap(c); ctx.fillText(c.toString(), x, mt+ph+18); }
 
-                    function drawSeries(color, arr){
+                    ctx.textAlign="center";
+
+                    const maxTicks=10, step=Math.max(1, Math.floor(xmax/maxTicks));
+
+                    for (let c=0; c<=xmax; c+=step){ const x=xMap(c); ctx.fillText(c.toString(), x, mt+ph+18); }
+
+                    function drawSeries(color, arr1, arr2){
                         ctx.strokeStyle=color; ctx.lineWidth=2; ctx.beginPath();
                         let started=false;
-                        for (let i=1;i<=arr.length;i++){
-                            const v=arr[i-1]; if (!isFinite(v)) continue;
-                            const x=xMap(i), y=yMap(v);
+                        for (let i=1;i<=arr1.length;i++){
+                            const u=arr1[i-1], v=arr2[i-1];
+                            if (!isFinite(v)) continue;
+                            const x=xMap(u), y=yMap(v);
                             if(!started){ctx.moveTo(x,y); started=true;} else ctx.lineTo(x,y);
                         }
                         ctx.stroke(); ctx.fillStyle=color;
-                        for (let i=1;i<=arr.length;i++){
-                            const v=arr[i-1]; if (!isFinite(v)) continue;
-                            const x=xMap(i), y=yMap(v);
+                        for (let i=1;i<=arr1.length;i++){
+                            const u=arr1[i-1], v=arr2[i-1];
+                            if (!isFinite(v)) continue;
+                            const x=xMap(u), y=yMap(v);
                             ctx.beginPath(); ctx.arc(x,y,3,0,Math.PI*2); ctx.fill();
                         }
                     }
-                    drawSeries("#22c55e", win.cycleMaxCh1Angles);
-                    drawSeries("#60a5fa", win.cycleMaxCh2Angles);
+                    drawSeries("#22c55e", win.cyclePeakCh1Times, win.cyclePeakCh1Angles);
+                    drawSeries("#60a5fa", win.cyclePeakCh2Times, win.cyclePeakCh2Angles);
                 }
             }
         }
@@ -720,17 +703,13 @@ ApplicationWindow {
 
                 ColumnLayout {
                     Label {
-                        text: (unites_device === "resistance") ? "Máximo CH1 (curva agregada)" : "Mínimo CH1 (curva agregada)";
+                        text: (win.deviceUnites === "resistance") ? "Máximo CH1 (curva agregada)" : "Mínimo CH1 (curva agregada)";
                         color: "#22c55e";
                         font.pixelSize: 14;
                         font.bold: true 
                     }
                     Label {
-                        text: if (unites_device === "resistance") {
-                                (isFinite(maxCh1Angle) && isFinite(maxCh1Value)) ? `Ángulo: ${maxCh1Angle.toFixed(2)}° — Resistencia: ${maxCh1Value.toFixed(4)} kΩ` : "—"
-                            } else if (unites_device === "current") {
-                                (isFinite(minCh1Angle) && isFinite(minCh1Value)) ? `Ángulo: ${minCh1Angle.toFixed(2)}° — Corriente: ${minCh1Value.toFixed(4)} mA` : "—"
-                            }
+                        text: (isFinite(win.peakCh1Time) && isFinite(win.peakCh1Angle) && isFinite(win.peakCh1Value)) ? `T: ${win.peakCh1Time.toFixed(1)} s — Áng: ${win.peakCh1Angle.toFixed(2)}° — Val: ${win.peakCh1Value.toFixed(4)} un` : "—"
                         color: "white";
                         font.pixelSize: 18;
                         font.bold: true
@@ -738,30 +717,26 @@ ApplicationWindow {
                 }
                 ColumnLayout {
                     Label { 
-                        text: (unites_device === "resistance") ? "Máximo CH2 (curva agregada)" : "Mínimo CH2 (curva agregada)";
+                        text: (deviceUnites === "resistance") ? "Máximo CH2 (curva agregada)" : "Mínimo CH2 (curva agregada)";
                         color: "#60a5fa";
                         font.pixelSize: 14;
                         font.bold: true 
                     }
                     Label {
-                        text: if (unites_device === "resistance") {
-                                (isFinite(maxCh2Angle) && isFinite(maxCh2Value)) ? `Ángulo: ${maxCh2Angle.toFixed(2)}° — Resistencia: ${maxCh2Value.toFixed(4)} kΩ` : "—"
-                            } else if (unites_device === "current") {
-                                (isFinite(minCh2Angle) && isFinite(minCh2Value)) ? `Ángulo: ${minCh2Angle.toFixed(2)}° — Corriente: ${minCh2Value.toFixed(4)} mA` : "—"
-                            }
-                        color: "white"; 
-                        font.pixelSize: 18; 
+                        text: (isFinite(win.peakCh2Time) && isFinite(win.peakCh2Angle) && isFinite(win.peakCh2Value)) ? `T: ${win.peakCh2Time.toFixed(1)} s — Áng: ${win.peakCh2Angle.toFixed(2)}° — Val: ${win.peakCh2Value.toFixed(4)} un` : "—"
+                        color: "white";
+                        font.pixelSize: 18;
                         font.bold: true
                     }
                 }
-                ColumnLayout{
-                    Button {
-                        text: "Ver terminal"
-                        Layout.preferredHeight: 36; Layout.preferredWidth: 120; font.pixelSize: 14
-                        ToolTip.visible: hovered
-                        ToolTip.text: "Alterna entre la terminal y los valores máximos"
+                ColumnLayout {
+                    Label {
+                        text: `${win.realTime}`;
+                        color: "white";
+                        font.pixelSize: 30;
+                        font.bold: true
                     }
-                    }
+                }
             }
         }
     }
@@ -771,17 +746,21 @@ ApplicationWindow {
         target: backend
 
         function onNewLDRSampleWithAngle(tt, v1, v2, absDeg, relDeg) {
-
+            
+            win.measurementTime = tt;
             win.ch1 = v1; win.ch2 = v2;
             win.angleAbs = absDeg; win.angleRel  = relDeg;
 
             const a = relDeg;
             const prev = win.prevAngle;
+
             // Se asigna el paso minimo aceptado (resolucion de movimiento)
             const eps  = Math.max(win.epsAngle, win.hysteresisDeg);
+
             // Valida que el angulo se encuentre en el rango establecido
             const inside = isFinite(a) && a >= win.forwardStartDeg && a <= win.forwardEndDeg;
             let inc = false, dec = false;
+            
             // Se determina si esta ocurriendo un movimiento ascendente o descendente
             if (isFinite(prev)) {
                 const d = a - prev;
@@ -792,17 +771,13 @@ ApplicationWindow {
             // Se incrementa la cantidad de subidas o bajadas
             if (inc) { win.incStreak++; win.decStreak = 0; }
             else if (dec) { win.decStreak++; win.incStreak = 0; }
-
-            // Debuggg ***
-            //console.log(win.collectingForward, inside)
-            //console.log(win.incStreak, win.decStreak)
             
             // Inicio de ciclo de ida
             if (!win.collectingForward) {
                 if (inside && win.incStreak >= win.incNeeded) {
                     win.collectingForward = true;
                     win.pendingCycleSnapshot = true;
-                    win.cycleBuckets = ({});
+                    win.dataCycle = [];
 
                     // El angulo debe pasar el valor del angulo definido mas un valor delta
                     win.sawStartGate = (a >= (win.forwardStartDeg + win.startGateDelta));
@@ -826,15 +801,9 @@ ApplicationWindow {
                     // console.log("esta dentro del rango")
 
                     // Se agrega la nueva lectura en la lista data
-                    win.data.push({ angle: a, ch1: v1, ch2: v2 });
-                    // Se agrega el nuevo angulo en cycleBuckets
-                    const key = a.toFixed(win.angleKeyDecimals);
-                    // Si no existe key en cycleBuckets se agrega
-                    var bc = win.cycleBuckets[key];
-                    if (!bc) { bc = { angle: parseFloat(key), ch1Vals: [], ch2Vals: [] }; win.cycleBuckets[key] = bc; }
-                    // Se agregan las lecturas de los canales
-                    if (isFinite(v1)) bc.ch1Vals.push(v1);
-                    if (isFinite(v2)) bc.ch2Vals.push(v2);
+                    win.data.push({ time: tt, angle: a, ch1: v1, ch2: v2 });
+                    // Se agrega la lectura a dataCycle
+                    win.dataCycle.push({ time: tt, angle: a, ch1: v1, ch2: v2});
                 }
 
                 // FIN válido: bajada sostenida después de haber alcanzado fin, o salir por arriba
@@ -842,8 +811,6 @@ ApplicationWindow {
                 const endByDec   = (reachedEnd && win.decStreak >= win.decNeeded);
                 const endByExit  = (!inside && isFinite(a) && a > win.forwardEndDeg);
                 const ending     = endByDec || endByExit;
-
-                console.log("termino de ciclo")
 
                 // Abort: bajada sostenida antes de alcanzar el fin
                 const abortByEarlyDec = (!reachedEnd && win.decStreak >= win.decNeeded);
@@ -855,8 +822,8 @@ ApplicationWindow {
                     console.log("fin de ciclo")
                     win.pendingCycleSnapshot = false;
                     win.collectingForward = false;
-                    win.cycleBuckets = ({})
-                    win.cycleIndex = Math.max(win.cycleMaxCh1Angles.length, win.cycleMaxCh2Angles.length);
+                    win.dataCycle = []
+                    win.cycleIndex = Math.max(win.cyclePeakCh1Angles.length, win.cyclePeakCh2Angles.length);
                     if (win.debugLogs) console.log("[cycle] EXIT (finalized)");
                 } else if (abortByEarlyDec && win.pendingCycleSnapshot) {
                     if (win.debugLogs) console.warn("[cycle] EXIT ABORT (vuelta antes de fin)");
@@ -874,12 +841,12 @@ ApplicationWindow {
             if (!a) {
                 // Guarda crudo
                 if (win.data.length > 0) {
-                    backend.saveCsv(win.data);
+                    backend.saveRawDataCsv(win.data);
                     win.data = [];
                 }
                 // Guarda Ángulo vs Ciclo (usando las dos series)
-                if (win.cycleMaxCh1Angles.length > 0 || win.cycleMaxCh2Angles.length > 0) {
-                    backend.saveAngleVsCycleCsv(win.cycleMaxCh1Angles, win.cycleMaxCh2Angles);
+                if (win.cyclePeakCh1Times.length > 0 || win.cyclePeakCh2Times.length > 0) {
+                    backend.saveAngleVsTimeCsv(win.cyclePeakCh1Times, win.cyclePeakCh2Times, win.cyclePeakCh1Angles, win.cyclePeakCh2Angles);
                 }
             }
         }
@@ -896,8 +863,8 @@ ApplicationWindow {
         function onAngleMaxMin(angMin, angMax) {
             win.forwardStartDeg = angMin;
             win.forwardEndDeg   = angMax;
-            win.xMinDeg = win.forwardStartDeg - 1;
-            win.xMaxDeg = win.forwardEndDeg + 1;
+            win.xMinDeg = win.forwardStartDeg - 0.5;
+            win.xMaxDeg = win.forwardEndDeg + 0.5;
         }
 
         function onSpeedMaxMin(vMin, vMax) {
@@ -913,9 +880,11 @@ ApplicationWindow {
 
         function onAdqDeviceChanged(device, unites) {
             win.device = device;
-            win.unites_device = unites;
+            win.deviceUnites = unites;
+        }
+
+        function onTimeUpdate(time){
+            win.realTime = time;
         }
     }
-    // Compatibilidad con pantallas antiguas
-    // Connections { target: backend; function onNewSample(tt, v0, v1) { win.ch1 = v0; win.ch2 = v1; } }
 }

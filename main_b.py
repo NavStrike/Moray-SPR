@@ -1,22 +1,23 @@
 """
 SPR Sensor Monitoring Application - Main Entry Point
 ====================================================
-
 Autor: moyraTech - Proyecto ProInnova SensorSPR
 File Name: main.py
 """
 
-from PySide6.QtCore import QObject, Signal, Slot, QTimer
+from PySide6.QtCore import QObject, Signal, Slot, QTimer, QThread
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
 
 from datetime import datetime
 from pathlib import Path
 import sys
+import os
 import math
 import csv
 import re
 import time
+import json
 
 from functions.adminData import accessData
 from functions.printInfo import print_info, print_warning, print_error, print_debug
@@ -30,8 +31,7 @@ except:
     production_mode = True
     print_debug("No se pudo determinar el modo de ejecución, se asume PRODUCTION por defecto.")
 
-import os
-
+# En modo production, se fuerza el uso de Wayland para evitar problemas de rendimiento en Linux.
 if production_mode:
     os.environ.setdefault("QT_QPA_PLATFORM", "wayland")
 
@@ -44,8 +44,7 @@ except Exception as _e:
     print_warning(f"pyserial no disponible: {_e}")
     _serial_available = False
 
-# ===== LED opcional con gpiozero =====
-
+# ===== LED opcional (LASER) =====
 try:
     from gpiozero import LED # type: ignore
     _led_available = True
@@ -53,13 +52,15 @@ except ImportError:
     print_warning("gpiozero no disponible, LED deshabilitado.")
     _led_available = False
 
+# ===== Backend para comunicación entre Python y QML ===== 
 class Backend(QObject):
-    ## Backend para comunicación entre Python y QML.
+    # Señales para comunicación con QML
 
     # Transmicion de datos
     newLDRSample = Signal(float, float, float)
     newLDRSampleWithAngle = Signal(float, float, float, float, float)
     angleUpdate = Signal(float, float)
+    timeUpdate = Signal(str)
     # Cambios de estado
     activeChanged = Signal(bool)
     angleMaxMin = Signal(float, float)
@@ -87,12 +88,16 @@ class Backend(QObject):
         # Estado interno
         self._active = False
         self._t = 0.0
-        self._dt = 0.003              # 50 ms ≈ 20 Hz
+        self._dt = 0.001              # 1 ms ≈ 1 kHz
+        self._t_init = 0.0
+        self._t_pres = 0.0
         self._use_ads = False
 
         # ESP32 Serial
+        self._serial = False
         self.ser = None
         self._serial_buf = b""
+        self._last_serial_rx_ms = 0     # Lectura serial del ESP32
         self._last_abs = float("nan")
         self._last_rel = float("nan")
 
@@ -111,6 +116,10 @@ class Backend(QObject):
         self.listSubstances = []
         self.anglesSubstances = []
         self.substance = ""
+
+        # Parámetro de guardado en CSV
+        self.saveDataName = "default"
+        self.saveDataPath = "exports"
 
         # Parámetros divisor
         self._adq_device = "ldr" # "ldr" or "photodetector"
@@ -139,12 +148,6 @@ class Backend(QObject):
                 print(f"No se pudo inicializar LED: {e}")
                 self.laser = None
 
-        # Serial ESP32
-        self.serial_timer = QTimer(self)
-        self.serial_timer.setInterval(10)
-        she = self.serial_timer.timeout.connect(self._poll_serial)
-        self._last_serial_rx_ms = 0
-
         if _serial_available:
             self._open_serial()
         else:
@@ -153,8 +156,8 @@ class Backend(QObject):
         # ADS1115 (si disponible)
         try:
             import board # type: ignore
-            from adafruit_ads1x15.ads1115 import ADS1115, P0, P1 # type: ignore
-            from adafruit_ads1x15.analog_in import AnalogIn # type: ignore
+            from adafruit_ads1x15.ads1115 import ADS1115, P0, P1, P2    # type: ignore
+            from adafruit_ads1x15.analog_in import AnalogIn             # type: ignore
 
             print_info("Inicializando ADS1115...")
             i2c = board.I2C()
@@ -162,8 +165,9 @@ class Backend(QObject):
             self.ads.gain = 1
             self.ads.data_rate = 860
 
-            self.chan0 = AnalogIn(self.ads, P0)
-            self.chan1 = AnalogIn(self.ads, P1)
+            self.chan0 = AnalogIn(self.ads, P0) # Canal de sensor 1
+            self.chan1 = AnalogIn(self.ads, P1) # Canal de sensor 2
+            self.chanRef0 = AnalogIn(self.ads, P2) # Canal de voltaje referencia (3V3/2)
 
             self._use_ads = True
             print_info("ADS1115 inicializado correctamente")
@@ -176,7 +180,13 @@ class Backend(QObject):
         # Timer adquisición
         self.timer = QTimer(self)
         self.timer.setInterval(int(self._dt * 1000))
-        self.timer.timeout.connect(self._on_timeout)
+        self.timer.timeout.connect(self._on_worktime)
+
+        # Timer visualización: angulo y tiempo (real y de funcionamiento)
+        self.timer_window = QTimer(self)
+        self.timer_window.setInterval(1)
+        self.timer_window.timeout.connect(self._on_timeout)
+        self.timer_window.start()
 
         # ---------------------------------------------
         # Lectura de datos guardados y configuración inicial
@@ -215,6 +225,7 @@ class Backend(QObject):
             self.viewSpeeds()
             self.viewSubstance()
             self.viewDevice()
+            print_info("Variables cargadas correctamente para QML")
         except Exception as e:
             print_error(f"Error cargando variables para QML: {e}")
     
@@ -226,10 +237,15 @@ class Backend(QObject):
         self.angMin = p1["angles"]["angMin"]
         self.angMax = p1["angles"]["angMax"]
         self.angzeroRel = p1["angles"]["angZeroRel"]
+
         self.velMin = p1["speeds"]["velMin"]
         self.velMax = p1["speeds"]["velMax"]
+
         self._adq_device = p1["device"]["name"]
         self._unites_device = p1["device"]["unites"]
+
+        self.saveDataName = p1["saveData"]["name"]
+        self.saveDataPath = p1["saveData"]["path"]
 
         p2 = accessData("substances.json").data
         if p2 is None: raise ValueError("No se pudieron cargar los datos de sustancias")
@@ -240,58 +256,72 @@ class Backend(QObject):
     
     # ===== Utilidades de exportación =====
     def _exports_dir(self) -> Path:
-        out_dir = Path(__file__).parent / "exports"
+        if self.saveDataName:
+            out_dir = Path(__file__).parent / self.saveDataPath / self.saveDataName 
+        else:
+            out_dir = Path(__file__).parent / self.saveDataPath
+
         out_dir.mkdir(parents=True, exist_ok=True)
         return out_dir
 
-    def _timestamp(self) -> str:
-        return datetime.now().strftime("%Y%m%d_%H%M%S")
-
-    @Slot(result=str)
-    def getExportsDir(self) -> str:
-        return str(self._exports_dir())
-
-    # ===== CSV (compat) -> ahora usa sufijo _datageneral =====
-    @Slot(list)
-    def saveCsv(self, data_list):
-        """
-        Compatibilidad con QML actual.
-        Guarda crudo como <fecha_hora>_datageneral.csv
-        """
+    def _timestamp(self, option = "all") -> str:
+        if option == "date":
+            return datetime.now().strftime("%Y/%m/%d")
+        elif option == "time":
+            return datetime.now().strftime("%H:%M:%S")
+        else:
+            return datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+    @Slot(list, list, list, list)
+    def saveJSON(self, data, dataProcessed, maxMinAngles, maxMinSpeeds):
         try:
             out_dir = self._exports_dir()
-            fname = f"{self._timestamp()}_datageneral.csv"
+            fname = f"{self._timestamp()}_dataprocessed.json"
             fpath = out_dir / fname
-            with open(fpath, "w", newline="", encoding="utf-8") as f:
-                w = csv.writer(f)
-                w.writerow(["angle_deg", "ch1_ohm", "ch2_ohm"])
-                for row in data_list:
-                    angle = float(row.get("angle", float("nan")))
-                    ch1   = float(row.get("ch1",   float("nan")))
-                    ch2   = float(row.get("ch2",   float("nan")))
-                    w.writerow([angle, ch1, ch2])
+
+            export_data = {
+                "metadata": {
+                    "date": self._timestamp("date"),
+                    "time": self._timestamp("time"),
+                    "source": "SPR Sensor Monitoring Application",
+                    "version": "1.0",
+                    "description": "Datos procesados de ángulo vs señal para análisis y visualización"
+                },
+                "data": data,
+                "processed_data": dataProcessed,
+                "max_min_angles": maxMinAngles,
+                "max_min_speeds": maxMinSpeeds
+            }
+
+            with open(fpath, "w", encoding="utf-8") as f:
+                json.dump(export_data, f, ensure_ascii=False, indent=4)
+
             self.csvSaved.emit(str(fpath))
-            print_info(f"CSV guardado: {fpath}")
+            print_info(f"[EXPORT] JSON procesado guardado: {fpath}")
         except Exception as e:
-            msg = f"Error guardando CSV: {e}"
+            msg = f"Error guardando JSON procesado: {e}"
             self.csvError.emit(msg)
             print_error(msg)
 
     # ===== CSV crudo explícito (idéntico al anterior; útil para exportAll) =====
     @Slot(list)
     def saveRawDataCsv(self, data_list):
+        # Guarda crudo como:
+        # Name: <fecha_hora>_datageneral.csv
         try:
             out_dir = self._exports_dir()
             fname = f"{self._timestamp()}_datageneral.csv"
             fpath = out_dir / fname
+
             with open(fpath, "w", newline="", encoding="utf-8") as f:
-                w = csv.writer(f)
-                w.writerow(["angle_deg", "ch1_ohm", "ch2_ohm"])
+                w = csv.writer(f, delimiter=";")
+                w.writerow(["time", "angle", "ch1", "ch2"])
                 for row in data_list:
+                    time = float(row.get("time", float("nan")))
                     angle = float(row.get("angle", float("nan")))
                     ch1   = float(row.get("ch1",   float("nan")))
                     ch2   = float(row.get("ch2",   float("nan")))
-                    w.writerow([angle, ch1, ch2])
+                    w.writerow([time, angle, ch1, ch2])
             self.csvSaved.emit(str(fpath))
             print_info(f"[EXPORT] CSV crudo guardado: {fpath}")
         except Exception as e:
@@ -300,36 +330,41 @@ class Backend(QObject):
             print_error(msg)
 
     # ===== CSV ángulo vs ciclo =====
-    @Slot(list, list)
-    def saveAngleVsCycleCsv(self, ch1_angles, ch2_angles):
+    @Slot(list, list, list, list)
+    def saveAngleVsTimeCsv(self, ch1_times, ch2_times, ch1_angles, ch2_angles):
 
-        # Guarda serie ángulo vs ciclo:
-        # cycle_index, ch1_angle_deg, ch2_angle_deg
+        # Guarda serie ángulo vs ciclo como:
         # Nombre: <fecha_hora>_angulovsciclo.csv
+        # cycle_index, ch1_angle_deg, ch2_angle_deg
 
         try:
             out_dir = self._exports_dir()
             fname = f"{self._timestamp()}_angulovsciclo.csv"
             fpath = out_dir / fname
 
-            n1 = len(ch1_angles) if ch1_angles is not None else 0
-            n2 = len(ch2_angles) if ch2_angles is not None else 0
+            n1 = len(ch1_times) if ch1_angles is not None else 0
+            n2 = len(ch2_times) if ch2_angles is not None else 0
             N  = max(n1, n2)
 
             with open(fpath, "w", newline="", encoding="utf-8") as f:
                 w = csv.writer(f)
-                w.writerow(["cycle_index", "ch1_angle_deg", "ch2_angle_deg"])
+                w.writerow(["cycle_index", "ch1_time", "ch1_angle_deg", "ch2_time", "ch2_angle_deg"])
                 for i in range(N):
+                    t1 = float(ch1_times[i]) if i < n1 else float("nan")
                     a1 = float(ch1_angles[i]) if i < n1 else float("nan")
+                    t2 = float(ch2_times[i]) if i < n1 else float("nan")
                     a2 = float(ch2_angles[i]) if i < n2 else float("nan")
-                    w.writerow([i+1, a1, a2])
+                    w.writerow([i+1, t1, a1, t2, a2])
 
             self.csvSaved.emit(str(fpath))
-            print_info(f"[EXPORT] CSV ángulo vs ciclo guardado: {fpath}")
+            print_info(f"[EXPORT] CSV ángulo vs tiempo guardado: {fpath}")
         except Exception as e:
-            msg = f"Error guardando CSV ángulo vs ciclo: {e}"
+            msg = f"Error guardando CSV ángulo vs tiempo: {e}"
             self.csvError.emit(msg)
             print_error(msg)
+
+    def _saveProcessedDataCsv(self, data_list):
+        pass
 
     # ===== Conversión Vout -> R_LDR (Ω) =====
     def _vout_to_signal(self, vout: float) -> float:
@@ -340,17 +375,17 @@ class Backend(QObject):
         if self._adq_device == "ldr":
 
             if self._unites_device == "current":
-                return vol / self._r_fixed_ldr
+                return vol / self._r_fixed_ldr*(1000)  # ms
             else:
-                return self._r_fixed_ldr * (vol / (self._vcc - vol))
+                return self._r_fixed_ldr * (vol / (self._vcc - vol))*(1/1000)    # kohm
             
-        elif self._adq_device == "photodiode":
+        elif self._adq_device == "photodetector":
 
             if self._unites_device == "current":
-                return (self._vcc - vol) / self._r_fixed_pho
+                return vol/self._r_fixed_pho*(1000)    # ms
             else:
-                return self._r_fixed_pho * vol / (self._vcc - vol)
-        
+                return self._r_fixed_pho * vol / (self._vcc - vol)*(1/1000)  # kohm
+
         else:
             return vol
 
@@ -388,7 +423,7 @@ class Backend(QObject):
                     pass
                 print_info(f"Conectado a ESP32 en {dev} @ {baud}")
                 self.serialStatusChanged.emit(f"ESP32 conectado: {dev}")
-                self.serial_timer.start()
+                self._serial = True
                 return
             except Exception:
                 continue
@@ -409,58 +444,6 @@ class Backend(QObject):
                     pass
         except Exception as e:
             print_error(f"Error enviando serial: {e}")
-
-    def _poll_serial(self):
-        if not self.ser:
-            return
-        try:
-            chunk = self.ser.read(1024)
-            if not chunk:
-                now_ms = int(time.monotonic() * 1000)
-                if self._last_serial_rx_ms == 0:
-                    self._last_serial_rx_ms = now_ms
-                elif now_ms - self._last_serial_rx_ms > 2000:
-                    self.serialStatusChanged.emit("ESP32 sin datos (2s)")
-                    self._last_serial_rx_ms = now_ms
-                return
-            self._serial_buf += chunk
-            while b"\n" in self._serial_buf:
-                line, self._serial_buf = self._serial_buf.split(b"\n", 1)
-                try:
-                    s = line.decode("utf-8", errors="ignore").strip()
-                    if s:
-                        # print_info(f"SER RX <- {s}")
-                        pass
-                except Exception:
-                    continue
-                m = re.search(r"abs=([-+]?\d+\.?\d*)\s+rel=([-+]?\d+\.?\d*)", s)
-                if m:
-                    try:
-                        abs_deg = float(m.group(1))
-                        rel_deg = float(m.group(2))
-                        self._last_abs = abs_deg
-                        self._last_rel = rel_deg
-                        self._last_serial_rx_ms = int(time.monotonic() * 1000)
-                        self.serialStatusChanged.emit("ESP32 recibiendo…")
-                        self.angleUpdate.emit(abs_deg, rel_deg)
-                    except Exception:
-                        pass
-        except Exception as e:
-            print_error(f"Error leyendo serial: {e}")
-            self.serialStatusChanged.emit("Error serial - reconectando…")
-            try:
-                if self.ser:
-                    try:
-                        self.ser.close()
-                    except Exception:
-                        pass
-            finally:
-                self.ser = None
-            try:
-                self.serial_timer.stop()
-            except Exception:
-                pass
-            QTimer.singleShot(1000, self._open_serial)
 
     # ===== Slots de control =====
     @Slot()
@@ -501,7 +484,6 @@ class Backend(QObject):
 
             self._send_serial("o\n")
             
-        
         else:
             print_info("Deteniendo adquisición de datos...")
             self.timer.stop()
@@ -535,11 +517,11 @@ class Backend(QObject):
         self.angMin = aMin
         self.angMax = aMax
 
-        time.sleep(0.1)
+        time.sleep(0.05)
         self._send_serial(f"a{aMin}\n")
-        time.sleep(0.1)
+        time.sleep(0.05)
         self._send_serial(f"b{aMax}\n")
-        time.sleep(0.1)
+        time.sleep(0.05)
 
         # Actualizacion de los angulos guardados
         m = accessData()
@@ -552,15 +534,14 @@ class Backend(QObject):
         self.velMin = vMin
         self.velMax = vMax
 
-        time.sleep(0.1)
+        time.sleep(0.05)
         self._send_serial(f"v1{self.velMin}\n")
-        time.sleep(0.1)
+        time.sleep(0.05)
         self._send_serial(f"v2{self.velMax}\n")
-        time.sleep(0.1)
+        time.sleep(0.05)
 
         # Actualizacion de los angulos guardados
-        m = accessData()
-        m.ChangeSpeeds([vMin, vMax])
+        accessData().ChangeSpeeds([vMin, vMax])
         
         print_info(f"Velocidades actualizadas: Min={self.velMin}, Max={self.velMax}")
 
@@ -570,52 +551,136 @@ class Backend(QObject):
             print_warning(f"Dispositivo de adquisición desconocido: {device}")
             return
         self._adq_device = device
-        print_info(f"Dispositivo de adquisición establecido a: {device}")
+        unites = "resistance" if device == "ldr" else "current"
+        self._unites_device = unites
+        accessData().ChangeAdqDevice(device, unites)
+        
+        print_info(f"Dispositivo de adquisición establecido a: {device}, unidades: {unites}")
     
     def isActive(self) -> bool:
         return self._active
     
-    # ===== Adquisición periódica =====
-    def _on_timeout(self):
+    def _poll_serial(self):
+        if not self.ser:
+            return
+        try:
+            chunk = self.ser.read(1024)
+            if not chunk:
+                now_ms = int(time.monotonic() * 1000)
+                if self._last_serial_rx_ms == 0:
+                    self._last_serial_rx_ms = now_ms
+                elif now_ms - self._last_serial_rx_ms > 2000:
+                    self.serialStatusChanged.emit("ESP32 sin datos (2s)")
+                    self._last_serial_rx_ms = now_ms
+                return
+            self._serial_buf += chunk
+            
+            # print("data inicio")
+            while b"\n" in self._serial_buf:
+                line, self._serial_buf = self._serial_buf.split(b"\n", 1)
+                try:
+                    s = line.decode("utf-8", errors="ignore").strip()
+                    if s:
+                        # print_info(f"SER RX <- {s}")
+                        pass
+                except Exception:
+                    continue
+                m = re.search(r"abs=([-+]?\d+\.?\d*)\s+rel=([-+]?\d+\.?\d*)", s)
+                if m:
+                    try:
+                        abs_deg = float(m.group(1))
+                        rel_deg = float(m.group(2))
+                        self._last_abs = abs_deg
+                        self._last_rel = rel_deg
+                        self._last_serial_rx_ms = int(time.monotonic() * 1000)
+                        self.serialStatusChanged.emit("ESP32 recibiendo…")
+                        self.angleUpdate.emit(abs_deg, rel_deg)
+                    except Exception:
+                        pass
+            # print("data fin")
+        except Exception as e:
+            print_error(f"Error leyendo serial: {e}")
+            self.serialStatusChanged.emit("Error serial - reconectando…")
+            try:
+                if self.ser:
+                    try:
+                        self.ser.close()
+                    except Exception:
+                        pass
+            finally:
+                self.ser = None
+            try:
+                self._serial = False
+            except Exception:
+                pass
+
+            QTimer.singleShot(1000, self._open_serial)
+    
+    # ===== Adquisición tiempo de trabajo =====
+    def _on_worktime(self):
         self._t += self._dt
+
+        if self._t_init == 0: self._t_init = time.perf_counter()
+        else: self._t_pres = time.perf_counter()
+        
+        diff_time = self._t_pres - self._t_init
+
+        if self._serial:
+            self._poll_serial()
+        elif not production_mode:
+            # Generacion de datos simulados para desarrollo sin hardware
+            self._sim_phase += self._dt
+            self._sim_phase2 += self._dt
+
+            # Asignacion de valores de angulo relativo
+            self._last_rel = self._angRelaTest
+
+            # Codicional de angulo relativo
+            if self._angRelaTest >= self._angRelaFin:
+                self._angRelaTest = self._angRelaIn
+            else:
+                self._angRelaTest += self._advance
+
+            # Asignacion de valores de angulo absoluto
+            self._last_abs = self._last_rel
 
         if self._use_ads:
             try:
+                noise_voltage = float(self.chanRef0.voltage) - 3.3/2.0
                 ch1_voltage = float(self.chan0.voltage)
                 ch2_voltage = float(self.chan1.voltage)
+
+                if ch1_voltage > self._vcc:
+                    print_warning("El voltaje del canal 1 es mayor a 3.3V")
+                    ch1_voltage = float("nan")
+            
+                if ch2_voltage > self._vcc:
+                    print_warning("El voltaje del canal 2 es mayor a 3.3V")
+                    ch2_voltage = float("nan")
+
             except Exception as e:
                 print_error(f"Error leyendo ADS1115: {e}")
                 ch1_voltage = float("nan")
                 ch2_voltage = float("nan")
-        else :
-            if not production_mode:
-                # Generacion de datos simulados para desarrollo sin hardware
-                self._sim_phase += self._dt
-                self._sim_phase2 += self._dt
 
-                # Asignación de lecturas simuladas con oscilaciones senoidales
-                ch1_voltage = 1.65 + math.sin(self._sim_phase * 2 * math.pi / 2.0) * 1.0
-                ch2_voltage = 1.65 + math.sin(self._sim_phase2 * 2 * math.pi / 2.5) * 0.8
+        elif not production_mode: 
+            # Generacion de datos simulados para desarrollo sin hardware
+            # Asignación de lecturas simuladas con oscilaciones senoidales
+            ch1_voltage = 0.05 + math.sin(self._sim_phase * 2 * math.pi / 2.0) * 0.5
+            ch2_voltage = 0.05 + math.sin(self._sim_phase2 * 2 * math.pi / 2.5) * 0.5
 
-                # Asignacion de valores de angulo relativo y absoluto
-                self._last_rel = self._angRelaTest
-                self._last_abs = self._last_rel
-
-                # Codicional de 
-                if self._angRelaTest >= self._angRelaFin:
-                    self._angRelaTest = self._angRelaIn
-                else:
-                    self._angRelaTest += self._advance
-
-
-        ch1_res = self._vout_to_signal(ch1_voltage) if math.isfinite(ch1_voltage) else float("nan")
+        # Se cambio el ch1_voltage por el ch2_voltage (solo cambiado temporalmente)
+        ch1_res = self._vout_to_signal(ch2_voltage) if math.isfinite(ch2_voltage) else float("nan")
         ch2_res = self._vout_to_signal(ch2_voltage) if math.isfinite(ch2_voltage) else float("nan")
-        #print_info(f"ch1_res_current: {ch1_res}, ch2_res_current: {ch2_res}")
-
+            
         # emitir datos a QML
-        self.newLDRSample.emit(self._t, ch1_res, ch2_res)
-        self.newLDRSampleWithAngle.emit(self._t, ch1_res, ch2_res, self._last_abs, self._last_rel)
-        
+        self.newLDRSampleWithAngle.emit(diff_time, ch1_res, ch2_res, self._last_abs, self._last_rel)
+
+    # ===== Adquisición tiempo fuera =====
+    def _on_timeout(self):
+        self._poll_serial()
+        self.timeUpdate.emit(self._timestamp("time"))
+
 
 def main():
     app = QGuiApplication(sys.argv)
@@ -626,6 +691,7 @@ def main():
 
     def _cleanup():
         try:
+            backend.timer_window.stop()
             if backend.laser is not None:
                 backend.laser.off()
                 print_info("LED apagado (salida)")
