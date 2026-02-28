@@ -463,7 +463,7 @@ ApplicationWindow {
                             win.cyclePeakCh2Times = []
                             win.cycleIndex = 0
                             win.peakCh1Time = NaN; win.peakCh1Angle = NaN; win.peakCh1Value = NaN
-                            win.peakCh2Time = NaN; win.peakCh2Angle = NaN; win.peakCh2alue = NaN
+                            win.peakCh2Time = NaN; win.peakCh2Angle = NaN; win.peakCh2Value = NaN
 
                             win.incStreak = 0; win.decStreak = 0
                             win.sawStartGate = false; win.sawEndGate = false
