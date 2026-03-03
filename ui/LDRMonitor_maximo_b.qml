@@ -163,6 +163,27 @@ ApplicationWindow {
         return result;
     }
 
+    // Filtro de savintky-golay
+    function _SavitzkyGolay(arr) {
+        if (!arr || arr.length < 5) return arr;
+        
+        const result = [...arr]; // Copia del array original
+        
+        // coefficients Savitzky-Golay for 5
+        const coeff = [-3/35, 12/35, 17/35, 12/35, -3/35]
+        
+        // Aplicar el filtro a los puntos centrales
+        for (let i = 2; i < arr.length - 2; i++) {
+            result[i] = coeff[0] * arr[i-2] + 
+                        coeff[1] * arr[i-1] + 
+                        coeff[2] * arr[i] + 
+                        coeff[3] * arr[i+1] + 
+                        coeff[4] * arr[i+2];
+        }
+        print("Se aplicó el filtro de Savintky-Golay")
+        return result;
+    }
+
     // Funcion unificada de filtros
     function applyFilter(arr) {
         if (!arr || arr.length === 0) return NaN;
@@ -184,6 +205,11 @@ ApplicationWindow {
             arrCh1Filter = _ema(arrCh1, win.emaAlpha);
             arrCh2Filter = _ema(arrCh2, win.emaAlpha);
         }
+
+        for (let i = 0; i < 10; i++)
+            arrCh1Filter = _SavitzkyGolay(arrCh1Filter)
+            arrCh2Filter = _SavitzkyGolay(arrCh2Filter)
+
         for (let i = 0; i < arr.length; i++) {
             dataCycleFilter.push({time: arrTime[i], angle: arrAngle[i], ch1: arrCh1Filter[i], ch2: arrCh2Filter[i]});
         }
@@ -237,17 +263,17 @@ ApplicationWindow {
         if (win.deviceUnites == "current"){
             best1.val = Math.min(...valCh1);
             best2.val = Math.min(...valCh2);
-            let centroid1 = findCentroid(valAngle, valCh1, valTime, 15, "min");
-            let centroid2 = findCentroid(valAngle, valCh2, valTime, 15, "min");
-            best1_centroid.time = centroid1[0]; best1_centroid.angle = centroid1[1]; best1_centroid.val = centroid1[1]
-            best2_centroid.time = centroid2[0]; best2_centroid.angle = centroid2[1]; best2_centroid.val = centroid2[1]
+            let centroid1 = findCentroid(valAngle, valCh1, valTime, 50, "min");
+            let centroid2 = findCentroid(valAngle, valCh2, valTime, 50, "min");
+            best1_centroid.angle = centroid1[0]; best1_centroid.val = centroid1[1]; best1_centroid.time = centroid1[2]
+            best2_centroid.angle = centroid2[0]; best2_centroid.val = centroid2[1]; best2_centroid.time = centroid2[2]
         } else {
             best1.val = Math.max(...valCh1);
             best2.val = Math.max(...valCh2);
-            let centroid1 = findCentroid(valAngle, valCh1, valTime, 15, "max");
-            let centroid2 = findCentroid(valAngle, valCh2, valTime, 15, "max");
-            best1_centroid.time = centroid1[0]; best1_centroid.angle = centroid1[1]; best1_centroid.val = centroid1[1]
-            best2_centroid.time = centroid2[0]; best2_centroid.angle = centroid2[1]; best2_centroid.val = centroid2[1]
+            let centroid1 = findCentroid(valAngle, valCh1, valTime, 50, "max");
+            let centroid2 = findCentroid(valAngle, valCh2, valTime, 50, "max");
+            best1_centroid.angle = centroid1[0]; best1_centroid.val = centroid1[1]; best1_centroid.time = centroid1[2]
+            best2_centroid.angle = centroid2[0]; best2_centroid.val = centroid2[1]; best2_centroid.time = centroid2[2]
         }
 
         let posBest1 = valCh1.indexOf(best1.val);
@@ -270,9 +296,9 @@ ApplicationWindow {
         win.cyclePeakCh2Times.push(best2.time);
         win.cyclePeakCh2Angles.push(best2.angle);
 
-        win.cyclePeakCh1CentroidAngles.push(best1_centroid.time);
+        win.cyclePeakCh1CentroidTimes.push(best1_centroid.time);
         win.cyclePeakCh1CentroidAngles.push(best1_centroid.angle);
-        win.cyclePeakCh2CentroidAngles.push(best2_centroid.time);
+        win.cyclePeakCh2CentroidTimes.push(best2_centroid.time);
         win.cyclePeakCh2CentroidAngles.push(best2_centroid.angle);
     }
 
@@ -516,6 +542,12 @@ ApplicationWindow {
                             win.cyclePeakCh1Times = []
                             win.cyclePeakCh2Angles = []
                             win.cyclePeakCh2Times = []
+
+                            win.cyclePeakCh1CentroidTimes = []
+                            win.cyclePeakCh1CentroidAngles = []
+                            win.cyclePeakCh2CentroidTimes = []
+                            win.cyclePeakCh2CentroidAngles = []
+
                             win.cycleIndex = 0
                             win.peakCh1Time = NaN; win.peakCh1Angle = NaN; win.peakCh1Value = NaN
                             win.peakCh2Time = NaN; win.peakCh2Angle = NaN; win.peakCh2Value = NaN

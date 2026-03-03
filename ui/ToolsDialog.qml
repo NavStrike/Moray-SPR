@@ -8,8 +8,8 @@ Dialog {
     id: winTools
     title: "Herramientas adicionales"
     modal: true
-    width: 800
-    height: 450
+    width: parent.width
+    height: parent.height
     padding: 20
 
     // Evita visivilidad del encabezado
