@@ -52,6 +52,10 @@ except ImportError:
     print_warning("gpiozero no disponible, LED deshabilitado.")
     _led_available = False
 
+# Interrupción para la lectura de datos del encoder y ADC
+class SerialReaderThread(QThread):
+    pass
+
 # ===== Backend para comunicación entre Python y QML ===== 
 class Backend(QObject):
     # Señales para comunicación con QML
@@ -668,9 +672,8 @@ class Backend(QObject):
             # Asignación de lecturas simuladas con oscilaciones senoidales
             ch1_voltage = 0.05 + math.sin(self._sim_phase * 2 * math.pi / 2.0) * 0.5
             ch2_voltage = 0.05 + math.sin(self._sim_phase2 * 2 * math.pi / 2.5) * 0.5
-
-        # Se cambio el ch1_voltage por el ch2_voltage (solo cambiado temporalmente)
-        ch1_res = self._vout_to_signal(ch2_voltage) if math.isfinite(ch2_voltage) else float("nan")
+        
+        ch1_res = self._vout_to_signal(ch1_voltage) if math.isfinite(ch1_voltage) else float("nan")
         ch2_res = self._vout_to_signal(ch2_voltage) if math.isfinite(ch2_voltage) else float("nan")
             
         # emitir datos a QML
@@ -680,6 +683,7 @@ class Backend(QObject):
     def _on_timeout(self):
         self._poll_serial()
         self.timeUpdate.emit(self._timestamp("time"))
+
 
 
 def main():

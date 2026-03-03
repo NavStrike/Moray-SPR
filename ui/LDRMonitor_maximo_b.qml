@@ -93,6 +93,12 @@ ApplicationWindow {
     property var cyclePeakCh1Times: []
     property var cyclePeakCh2Angles: []
     property var cyclePeakCh2Times: []
+
+    property var cyclePeakCh1CentroidAngles: []
+    property var cyclePeakCh1CentroidTimes: []
+    property var cyclePeakCh2CentroidAngles: []
+    property var cyclePeakCh2CentroidTimes: []
+
     property int cycleIndex: 0
 
     // Labels de los picos (peaks) de la curva agregada actual
@@ -172,8 +178,8 @@ ApplicationWindow {
         let arrCh1Filter = []; let arrCh2Filter = [];
 
         if (win.filterType === "median") {
-            arrCh1Filter = _median(arrCh1, win.windowMed);
-            arrCh2Filter = _median(arrCh2, win.windowMed);
+            arrCh1Filter = _median(arrCh1, win.kernelMed);
+            arrCh2Filter = _median(arrCh2, win.kernelMed);
         } else if (win.filterType === "ema") {
             arrCh1Filter = _ema(arrCh1, win.emaAlpha);
             arrCh2Filter = _ema(arrCh2, win.emaAlpha);
@@ -183,19 +189,65 @@ ApplicationWindow {
         }
     }
 
+    function findCentroid(arrx, arry, arrz, widthWindow = 15, typeOfPeak = "max"){
+        if (arrx.length !== arry.length){return null}
+        let idxPeak;
+        if (typeOfPeak == "max") {idxPeak = arry.indexOf(Math.max(...arry));}
+        else {idxPeak = arry.indexOf(Math.min(...arry));}
+
+        let start = Math.max(0, idxPeak - widthWindow);
+        let end = Math.min(arry.length - 1, idxPeak + widthWindow);
+
+        let numForX = 0;
+        let numForY = 0;
+        let numForZ = 0;
+        let den = 0;
+        
+        for (let i = start; i <= end; i++) {
+            let weight = 0
+            if (typeOfPeak == "max") {weight = Math.abs(arry[i]);}
+            else {weight = Math.abs(Math.max(...arry) - arry[i]);}
+            numForX += arrx[i] * weight;
+            numForY += arry[i] * weight;
+            numForZ += arrz[i] * weight;
+            den += weight;
+
+        }
+        const xPeak = den !== 0 ? numForX / den : null;
+        const yPeak = den !== 0 ? numForY / den : null;
+        const zPeak = den !== 0 ? numForZ / den : null;
+
+        return [xPeak, yPeak, zPeak]
+    }
+
     // === adquiere labels de MÁXIMOS desde la curva actual ===
     function updatePeakLabelsFromDataFilter() {
-        let valCh1 = dataCycleFilter.map(d => d.ch1); let valCh2 = dataCycleFilter.map(d => d.ch2);
+        let valCh1 = dataCycleFilter.map(d => d.ch1);
+        let valCh2 = dataCycleFilter.map(d => d.ch2);
+
+        let valTime = dataCycleFilter.map(d => d.time);
+        let valAngle = dataCycleFilter.map(d => d.angle);
 
         let best1 = {time: NaN, angle: NaN, val: -Infinity};
         let best2 = {time: NaN, angle: NaN, val: -Infinity};
 
+        let best1_centroid = {time: NaN, angle: NaN, val: -Infinity};
+        let best2_centroid = {time: NaN, angle: NaN, val: -Infinity};
+
         if (win.deviceUnites == "current"){
             best1.val = Math.min(...valCh1);
             best2.val = Math.min(...valCh2);
+            let centroid1 = findCentroid(valAngle, valCh1, valTime, 15, "min");
+            let centroid2 = findCentroid(valAngle, valCh2, valTime, 15, "min");
+            best1_centroid.time = centroid1[0]; best1_centroid.angle = centroid1[1]; best1_centroid.val = centroid1[1]
+            best2_centroid.time = centroid2[0]; best2_centroid.angle = centroid2[1]; best2_centroid.val = centroid2[1]
         } else {
             best1.val = Math.max(...valCh1);
             best2.val = Math.max(...valCh2);
+            let centroid1 = findCentroid(valAngle, valCh1, valTime, 15, "max");
+            let centroid2 = findCentroid(valAngle, valCh2, valTime, 15, "max");
+            best1_centroid.time = centroid1[0]; best1_centroid.angle = centroid1[1]; best1_centroid.val = centroid1[1]
+            best2_centroid.time = centroid2[0]; best2_centroid.angle = centroid2[1]; best2_centroid.val = centroid2[1]
         }
 
         let posBest1 = valCh1.indexOf(best1.val);
@@ -218,7 +270,10 @@ ApplicationWindow {
         win.cyclePeakCh2Times.push(best2.time);
         win.cyclePeakCh2Angles.push(best2.angle);
 
-        console.log(win.peakCh2Time, win.peakCh2Angle, win.peakCh2Value);
+        win.cyclePeakCh1CentroidAngles.push(best1_centroid.time);
+        win.cyclePeakCh1CentroidAngles.push(best1_centroid.angle);
+        win.cyclePeakCh2CentroidAngles.push(best2_centroid.time);
+        win.cyclePeakCh2CentroidAngles.push(best2_centroid.angle);
     }
 
     function resetValues(){
@@ -686,6 +741,9 @@ ApplicationWindow {
                     }
                     drawSeries("#22c55e", win.cyclePeakCh1Times, win.cyclePeakCh1Angles);
                     drawSeries("#60a5fa", win.cyclePeakCh2Times, win.cyclePeakCh2Angles);
+
+                    drawSeries('#ec706c', win.cyclePeakCh1CentroidTimes, win.cyclePeakCh1CentroidAngles);
+                    drawSeries('#dac511', win.cyclePeakCh2CentroidTimes, win.cyclePeakCh2CentroidAngles);
                 }
             }
         }
