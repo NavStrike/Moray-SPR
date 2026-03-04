@@ -111,9 +111,7 @@ Dialog {
                 Button {
                     text: "Guardar datos" 
                     enabled: !win.active
-                    onClicked: {
-                        backend.saveRawDataCsv();
-                    }
+                    onClicked: {backend.saveRawDataCsv();}
                     Layout.preferredHeight: 36
                     Layout.preferredWidth: 160
                     font.pixelSize: 14
@@ -146,6 +144,35 @@ Dialog {
                     color: "white"
                     font.bold: true; font.pixelSize: 20
                     Layout.preferredHeight: 50
+                }
+            }
+
+            RowLayout{
+                Layout.fillWidth: true
+                spacing: 5
+
+                Label{
+                    text: "Modificar la corriente del motor:"
+                    color: "white" 
+                    font.bold: true; font.pixelSize: 20
+                    Layout.preferredHeight: 50
+                }
+
+                TextField {
+                    id: textMotorCurrent
+                    text: win.motorCurrent
+                    font.pixelSize: 20
+                    Layout.preferredWidth: 150
+                    Layout.preferredHeight: 50
+                }
+
+                Button {
+                    text: "Establecer";
+                    enabled: !win.active;
+                    onClicked: {backend.setCurrent(textMotorCurrent.text);}
+                    Layout.preferredHeight: 36
+                    Layout.preferredWidth: 160
+                    font.pixelSize: 14
                 }
             }
                 

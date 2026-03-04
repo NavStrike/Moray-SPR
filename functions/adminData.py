@@ -55,6 +55,10 @@ class accessData():
         self.data["device"]["unites"] = deviceUnites  # type: ignore  
         self.update()
 
+    def ChangeCurrent(self, current):
+        self.data["current"] = current # type: ignore
+        self.update()
+
 class accessCsv():
     def __init__(self):
         self.root = Path(__file__).resolve().parent.parent
@@ -82,10 +86,10 @@ class accessCsv():
         # print(f'Hay {len(self.f_angVsCiclos)} archivos:')
         return len(self.f_dataGeneral), len(self.f_angVsCiclos)
     
-    def viewData(self, n, filter = 'None', kernel = 5):
+    def viewData(self, n, filter = 'None', kernel = 5, delimiter = ","):
         self.n = n
         self.arch = Path(f'{self.root}/exports/datageneral/{self.f_dataGeneral[n-1]}').expanduser()
-        self.df = np.genfromtxt(self.arch, delimiter=",", skip_header=1)
+        self.df = np.genfromtxt(self.arch, delimiter=delimiter, skip_header=1)
 
         cycles = []
         bkpoints = np.where(np.diff(self.df[:,0]) < 0)[0] + 1

@@ -47,16 +47,19 @@ ApplicationWindow {
     // Limites fijos mecanismo
     // Solo cambiar al modificar el hardware
     // Limite movimiento
-    property real upLimit: 85
-    property real downLimit: 15
+    property real upLimit: 85;
+    property real downLimit: 15;
 
     // Limite de velocidad
-    property real upLimitVel: 40
-    property real downLimitVel: 0.1
+    property real upLimitVel: 40;
+    property real downLimitVel: 0.1;
 
     // Velocidades minima y maxima
-    property real velMinCycle: 0
-    property real velMaxCycle: 0
+    property real velMinCycle: 0;
+    property real velMaxCycle: 0;
+
+    // Corriente
+    property real motorCurrent: 0;
 
     // Sustancia
     property  var substances: []
@@ -169,7 +172,7 @@ ApplicationWindow {
         
         const result = [...arr]; // Copia del array original
         
-        // coefficients Savitzky-Golay for 5
+        // coeficientes de Savitzky-Golay para 5
         const coeff = [-3/35, 12/35, 17/35, 12/35, -3/35]
         
         // Aplicar el filtro a los puntos centrales
@@ -971,6 +974,10 @@ ApplicationWindow {
         function onAdqDeviceChanged(device, unites) {
             win.device = device;
             win.deviceUnites = unites;
+        }
+
+        function onCurrentChanged(current){
+            win.motorCurrent = current;
         }
 
         function onTimeUpdate(time){

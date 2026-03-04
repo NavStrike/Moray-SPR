@@ -72,6 +72,7 @@ class Backend(QObject):
     substanceAct = Signal(list, list, str)
     serialStatusChanged = Signal(str)
     adqDeviceChanged = Signal(str, str)
+    currentChanged = Signal(float)
     # Guardado de archivos
     csvSaved = Signal(str)
     csvError = Signal(str)
@@ -115,6 +116,9 @@ class Backend(QObject):
         # Velocidades min y max
         self.velMin = 4
         self.velMax = 12
+
+        # Valor de la corriente
+        self.current = 550
 
         # Sustancia actual
         self.listSubstances = []
@@ -229,6 +233,7 @@ class Backend(QObject):
             self.viewSpeeds()
             self.viewSubstance()
             self.viewDevice()
+            self.viewCurrent()
             print_info("Variables cargadas correctamente para QML")
         except Exception as e:
             print_error(f"Error cargando variables para QML: {e}")
@@ -513,6 +518,10 @@ class Backend(QObject):
         self.adqDeviceChanged.emit(self._adq_device, self._unites_device)
 
     @Slot()
+    def viewCurrent(self):
+        self.currentChanged.emit(self.current)
+    
+    @Slot()
     def viewSubstance(self):
         self.substanceAct.emit(self.listSubstances, self.anglesSubstances, self.substance)
 
@@ -548,6 +557,19 @@ class Backend(QObject):
         accessData().ChangeSpeeds([vMin, vMax])
         
         print_info(f"Velocidades actualizadas: Min={self.velMin}, Max={self.velMax}")
+
+    @Slot(int)
+    def setCurrent(self, currentValue: int):
+        self.current = currentValue
+
+        time.sleep(0.05)
+        self._send_serial(f"c{self.current}\n")
+        time.sleep(0.05)
+
+        # Actualización de los angulos guardados
+        accessData().ChangeCurrent(self.current)
+        
+        print_info(f"Corriente actualizada: {self.current}")
 
     @Slot(str)
     def setAdqDevice(self, device: str):
