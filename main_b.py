@@ -54,7 +54,9 @@ except ImportError:
 
 # Interrupción para la lectura de datos del encoder y ADC
 class SerialReaderThread(QThread):
-    pass
+    data_received = Signal(dict)    # Señal con los datos decodificados
+    def __init__(self):
+        pass
 
 # ===== Backend para comunicación entre Python y QML ===== 
 class Backend(QObject):
@@ -558,15 +560,21 @@ class Backend(QObject):
         
         print_info(f"Velocidades actualizadas: Min={self.velMin}, Max={self.velMax}")
 
+    def currentToReal(self, value):
+        a=0.0008; b=-0.3039; c=73.123 # parabola -> f(x)=ax^2+bx+c
+        h=189.9375; k=46.9369094 # vertice de parabola
+        return ((value-k)/a)**0.5+h
+
     @Slot(int)
     def setCurrent(self, currentValue: int):
         self.current = currentValue
 
         time.sleep(0.05)
+        # currentRealValue = self.currentToReal(self.current)
         self._send_serial(f"c{self.current}\n")
         time.sleep(0.05)
 
-        # Actualización de los angulos guardados
+        # Actualización de la corriente motor guardada
         accessData().ChangeCurrent(self.current)
         
         print_info(f"Corriente actualizada: {self.current}")

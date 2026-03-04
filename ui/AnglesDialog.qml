@@ -160,7 +160,7 @@ Dialog {
             spacing: 8
             GridLayout{
                 columns: 3
-                rows: 3
+                rows: 4
                 
                 Button1 {text: "7"; onClicked: {addNumber(7)}}
                 Button1 {text: "8"; onClicked: {addNumber(8)}}

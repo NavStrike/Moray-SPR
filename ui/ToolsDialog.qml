@@ -5,6 +5,9 @@ import QtQuick.Window 6.0
 import QtQuick.Dialogs 6.0
 
 Dialog {
+    //-- textFiel que está seleccionado
+    property TextField activeInput: null
+
     id: winTools
     title: "Herramientas adicionales"
     modal: true
@@ -30,11 +33,10 @@ Dialog {
         radius: 15
     }
 
-    RowLayout{
+    ColumnLayout{
         anchors.fill: parent
         spacing: 8
         layoutDirection: Qt.LeftToRight
-        //uniformCellSizes: true
 
         ColumnLayout{
             Layout.fillWidth: true
@@ -136,6 +138,7 @@ Dialog {
                     font.pixelSize: 20
                     Layout.preferredWidth: 150
                     Layout.preferredHeight: 50
+                    onActiveFocusChanged: if(activeFocus) activeInput = nameFile
 
                 }
 
@@ -143,7 +146,7 @@ Dialog {
                     text: ".csv:"
                     color: "white"
                     font.bold: true; font.pixelSize: 20
-                    Layout.preferredHeight: 50
+                    Layout.preferredHeight: 36
                 }
             }
 
@@ -155,15 +158,16 @@ Dialog {
                     text: "Modificar la corriente del motor:"
                     color: "white" 
                     font.bold: true; font.pixelSize: 20
-                    Layout.preferredHeight: 50
+                    Layout.preferredHeight: 36
                 }
 
                 TextField {
                     id: textMotorCurrent
                     text: win.motorCurrent
-                    font.pixelSize: 20
+                    font.pixelSize: 15
                     Layout.preferredWidth: 150
-                    Layout.preferredHeight: 50
+                    Layout.preferredHeight: 36
+                    onActiveFocusChanged: if(activeFocus) activeInput = textMotorCurrent
                 }
 
                 Button {
@@ -197,5 +201,72 @@ Dialog {
                 }
             }
         }
+
+        RowLayout{
+            Layout.fillWidth: true
+            anchors.margins: 10
+            spacing: 8
+
+            GridLayout{
+                columns: 15
+                rows: 3
+                
+                Button1 {text: "Q"; onClicked: {addCharacter("Q")}}
+                Button1 {text: "W"; onClicked: {addCharacter("W")}}
+                Button1 {text: "E"; onClicked: {addCharacter("E")}}
+                Button1 {text: "R"; onClicked: {addCharacter("R")}}
+                Button1 {text: "S"; onClicked: {addCharacter("S")}}
+                Button1 {text: "T"; onClicked: {addCharacter("T")}}
+                Button1 {text: "Y"; onClicked: {addCharacter("Y")}}
+                Button1 {text: "U"; onClicked: {addCharacter("U")}}
+                Button1 {text: "I"; onClicked: {addCharacter("I")}}
+                Button1 {text: "O"; onClicked: {addCharacter("O")}}
+                Button1 {text: "P"; onClicked: {addCharacter("P")}}
+
+                Button1 {text: "7"; onClicked: {addCharacter("7")}}
+                Button1 {text: "8"; onClicked: {addCharacter("8")}}
+                Button1 {text: "9"; onClicked: {addCharacter("9")}}
+                Button1 {text: "4"; onClicked: {addCharacter("4")}}
+
+                Button1 {text: "A"; onClicked: {addCharacter("A")}}
+                Button1 {text: "S"; onClicked: {addCharacter("S")}}
+                Button1 {text: "D"; onClicked: {addCharacter("D")}}
+                Button1 {text: "F"; onClicked: {addCharacter("F")}}
+                Button1 {text: "G"; onClicked: {addCharacter("G")}}
+                Button1 {text: "H"; onClicked: {addCharacter("H")}}
+                Button1 {text: "J"; onClicked: {addCharacter("J")}}
+                Button1 {text: "K"; onClicked: {addCharacter("K")}}
+                Button1 {text: "L"; onClicked: {addCharacter("L")}}
+                Button1 {text: "Ñ"; onClicked: {addCharacter("Ñ")}}
+                Button1 {text: "Z"; onClicked: {addCharacter("Z")}}
+
+                Button1 {text: "5"; onClicked: {addCharacter("5")}}
+                Button1 {text: "6"; onClicked: {addCharacter("6")}}
+                Button1 {text: "1"; onClicked: {addCharacter("1")}}
+                Button1 {text: "2"; onClicked: {addCharacter("2")}}
+
+                Button1 {text: "X"; onClicked: {addCharacter("X")}}
+                Button1 {text: "C"; onClicked: {addCharacter("C")}}
+                Button1 {text: "V"; onClicked: {addCharacter("V")}}
+                Button1 {text: "B"; onClicked: {addCharacter("B")}}
+                Button1 {text: "N"; onClicked: {addCharacter("N")}}
+                Button1 {text: "M"; onClicked: {addCharacter("M")}}
+                Button1 {text: "K"; onClicked: {addCharacter("K")}}
+                Button1 {text: "L"; onClicked: {addCharacter("L")}}
+                Button1 {text: "Ñ"; onClicked: {addCharacter("Ñ")}}
+                Button1 {text: "Z"; onClicked: {addCharacter("Z")}}
+                Button1 {text: "_"; onClicked: {addCharacter("_")}}
+
+                Button1 {text: "3"; onClicked: {addCharacter(3)}}
+                Button1 {text: "0"; onClicked: {addCharacter(0)}}
+                Button1 {text: "."; onClicked: {addCharacter(".")}}
+                Button1 {text: "Borrar"; onClicked: {activeInput.text = ""; activeInput.color = "black"} }
+            }
+        }
+    }
+
+    function addCharacter (letter){
+        let newValue = activeInput.text + letter;
+        activeInput.text = newValue; 
     }
 }
