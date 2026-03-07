@@ -7,6 +7,7 @@ import QtQuick.Dialogs 6.0
 Dialog {
     //-- textFiel que está seleccionado
     property TextField activeInput: null
+    property bool activeMayus: false
 
     id: winTools
     title: "Herramientas adicionales"
@@ -113,7 +114,11 @@ Dialog {
                 Button {
                     text: "Guardar datos" 
                     enabled: !win.active
-                    onClicked: {backend.saveRawDataCsv();}
+                    onClicked: {
+                        backend.setNameFile(nameFile.text)
+                        backend.saveRawDataCsv(win.data); 
+                        backend.saveAngleVsTimeCsv(win.cyclePeakCh1Times, win.cyclePeakCh2Times, win.cyclePeakCh1Angles, win.cyclePeakCh2Angles);
+                    }
                     Layout.preferredHeight: 36
                     Layout.preferredWidth: 160
                     font.pixelSize: 14
@@ -126,10 +131,10 @@ Dialog {
                 spacing: 5
 
                 Label{
-                    text: "Nombre:"
+                    text: "Nombre de la carpeta:"
                     color: "white" 
                     font.bold: true; font.pixelSize: 20
-                     Layout.preferredHeight: 50
+                    Layout.preferredHeight: 36
                 }
 
                 TextField {
@@ -137,16 +142,9 @@ Dialog {
                     text: ""
                     font.pixelSize: 20
                     Layout.preferredWidth: 150
-                    Layout.preferredHeight: 50
+                    Layout.preferredHeight: 36
                     onActiveFocusChanged: if(activeFocus) activeInput = nameFile
 
-                }
-
-                Label{
-                    text: ".csv:"
-                    color: "white"
-                    font.bold: true; font.pixelSize: 20
-                    Layout.preferredHeight: 36
                 }
             }
 
@@ -188,7 +186,7 @@ Dialog {
                     text: "Salir"
                     //font.pixelSize: 14
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 50
+                    Layout.preferredHeight: 40
                     onClicked: winTools.reject()
                 }
 
@@ -196,7 +194,7 @@ Dialog {
                     text: "Aceptar"
                     //font.pixelSize: 14
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 50
+                    Layout.preferredHeight: 40
                     onClicked: winTools.accept()
                 }
             }
@@ -206,10 +204,11 @@ Dialog {
             Layout.fillWidth: true
             anchors.margins: 10
             spacing: 8
+            Layout.alignment: Qt.AlignHCenter
 
             GridLayout{
-                columns: 15
-                rows: 3
+                columns: 16
+                rows: 4
                 
                 Button1 {text: "Q"; onClicked: {addCharacter("Q")}}
                 Button1 {text: "W"; onClicked: {addCharacter("W")}}
@@ -222,13 +221,13 @@ Dialog {
                 Button1 {text: "I"; onClicked: {addCharacter("I")}}
                 Button1 {text: "O"; onClicked: {addCharacter("O")}}
                 Button1 {text: "P"; onClicked: {addCharacter("P")}}
+                Button1 {text: "A"; onClicked: {addCharacter("A")}}
 
+                Button1 {text: "6"; onClicked: {addCharacter("6")}}
                 Button1 {text: "7"; onClicked: {addCharacter("7")}}
                 Button1 {text: "8"; onClicked: {addCharacter("8")}}
                 Button1 {text: "9"; onClicked: {addCharacter("9")}}
-                Button1 {text: "4"; onClicked: {addCharacter("4")}}
 
-                Button1 {text: "A"; onClicked: {addCharacter("A")}}
                 Button1 {text: "S"; onClicked: {addCharacter("S")}}
                 Button1 {text: "D"; onClicked: {addCharacter("D")}}
                 Button1 {text: "F"; onClicked: {addCharacter("F")}}
@@ -239,14 +238,14 @@ Dialog {
                 Button1 {text: "L"; onClicked: {addCharacter("L")}}
                 Button1 {text: "Ñ"; onClicked: {addCharacter("Ñ")}}
                 Button1 {text: "Z"; onClicked: {addCharacter("Z")}}
-
-                Button1 {text: "5"; onClicked: {addCharacter("5")}}
-                Button1 {text: "6"; onClicked: {addCharacter("6")}}
-                Button1 {text: "1"; onClicked: {addCharacter("1")}}
-                Button1 {text: "2"; onClicked: {addCharacter("2")}}
-
                 Button1 {text: "X"; onClicked: {addCharacter("X")}}
                 Button1 {text: "C"; onClicked: {addCharacter("C")}}
+
+                Button1 {text: "2"; onClicked: {addCharacter("2")}}
+                Button1 {text: "3"; onClicked: {addCharacter("3")}}
+                Button1 {text: "4"; onClicked: {addCharacter("4")}}
+                Button1 {text: "5"; onClicked: {addCharacter("5")}}
+
                 Button1 {text: "V"; onClicked: {addCharacter("V")}}
                 Button1 {text: "B"; onClicked: {addCharacter("B")}}
                 Button1 {text: "N"; onClicked: {addCharacter("N")}}
@@ -256,17 +255,21 @@ Dialog {
                 Button1 {text: "Ñ"; onClicked: {addCharacter("Ñ")}}
                 Button1 {text: "Z"; onClicked: {addCharacter("Z")}}
                 Button1 {text: "_"; onClicked: {addCharacter("_")}}
+                Button1 {text: "-"; onClicked: {addCharacter("-")}}
+                Button1 {text: "Borrar"; onClicked: {activeInput.text = ""; activeInput.color = "black"}}
+                Button1 {text: activeMayus ? "May" : "Min"; onClicked: {activeMayus = ! activeMayus;}}
 
-                Button1 {text: "3"; onClicked: {addCharacter(3)}}
-                Button1 {text: "0"; onClicked: {addCharacter(0)}}
+                Button1 {text: "1"; onClicked: {addCharacter("1")}}
+                Button1 {text: "0"; onClicked: {addCharacter("0")}}
                 Button1 {text: "."; onClicked: {addCharacter(".")}}
-                Button1 {text: "Borrar"; onClicked: {activeInput.text = ""; activeInput.color = "black"} }
+                Button1 {text: "Borrar"; onClicked: {activeInput.text = ""; activeInput.color = "black"}}
             }
         }
     }
 
     function addCharacter (letter){
+        if (! activeMayus){letter = letter.toLowerCase();}
         let newValue = activeInput.text + letter;
-        activeInput.text = newValue; 
+        activeInput.text = newValue;
     }
 }

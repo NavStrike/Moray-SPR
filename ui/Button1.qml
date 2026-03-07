@@ -6,5 +6,5 @@ import QtQuick.Dialogs 6.0
 
 Button {
     text: "Boton1"
-    Layout.preferredHeight: 80; Layout.preferredWidth: 80; font.pixelSize: 18
+    Layout.preferredHeight: 70; Layout.preferredWidth: 70; font.pixelSize: 18
 }

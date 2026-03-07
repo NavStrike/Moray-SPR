@@ -17,7 +17,7 @@ ApplicationWindow {
     color: "#0f172a"
     palette.buttonText: "black"
     
-    // ===== Otros archivos importados =====
+    // ===== Otras ventanas importadas =====
     AnglesDialog {id: winAngles}
     SpeedsDialog {id: winSpeeds}
     ToolsDialog {id: winTools}
@@ -34,11 +34,13 @@ ApplicationWindow {
     property var  data: []                  // crudo -> CSV {angle:°, ch1:<value>, ch2:<value>}
 
     // Vista
-    property string viewMode: "curve"           // "curve" | "cycles"
+    property string viewMode: "curve"           // "curve" || "cycles"
+    property bool viewCh1: true                 // true || false
+    property bool viewCh2: true                 // true || false
 
     // Dispositivo usado para realizar la lectura del laser
     property string device: "unknown"           // "ldr" | "photodetector" | "unknown"
-    property string deviceUnites: "current"    // "current" | "resistance"
+    property string deviceUnites: "current"     // "current" | "resistance"
 
     // Rango X (solo tramo de interés)
     property real xMinDeg: 0.0  
@@ -79,12 +81,18 @@ ApplicationWindow {
     property bool collectingForward: false
     property bool pendingCycleSnapshot: false
 
+    // Número de ciclo actual
+    property int cycleIndex: 1
+
+    // Ciclos borrados
+    property var cyclesDelete: []
+
     // Acumulación del ciclo actual
-    // [{angle:°, ch1:<value>, ch2:<value>}, ...]
+    // [{time:s, angle:°, ch1:<value>, ch2:<value>}, ...]
     property var dataCycle: []
 
     // Acumulación del ciclo actual con filtro (Data para graficar)
-    // {angle:[], ch1:[], ch2:[]}
+    // {time:[], angle:[], ch1:[], ch2:[]}
     property var dataCycleFilter: []
 
     // Parametros de ciclo
@@ -101,8 +109,6 @@ ApplicationWindow {
     property var cyclePeakCh1CentroidTimes: []
     property var cyclePeakCh2CentroidAngles: []
     property var cyclePeakCh2CentroidTimes: []
-
-    property int cycleIndex: 0
 
     // Labels de los picos (peaks) de la curva agregada actual
     // Format -> [Angle, Value, Time]
@@ -208,10 +214,6 @@ ApplicationWindow {
             arrCh1Filter = _ema(arrCh1, win.emaAlpha);
             arrCh2Filter = _ema(arrCh2, win.emaAlpha);
         }
-
-        for (let i = 0; i < 10; i++)
-            arrCh1Filter = _SavitzkyGolay(arrCh1Filter)
-            arrCh2Filter = _SavitzkyGolay(arrCh2Filter)
 
         for (let i = 0; i < arr.length; i++) {
             dataCycleFilter.push({time: arrTime[i], angle: arrAngle[i], ch1: arrCh1Filter[i], ch2: arrCh2Filter[i]});
@@ -337,9 +339,6 @@ ApplicationWindow {
         // 3) actualizar labels desde la curva filtrada
         updatePeakLabelsFromDataFilter();
 
-        // 4) Calculamos el número de ciclo actual (el índice del próximo punto a agregar)
-        win.cycleIndex = Math.max(win.cyclePeakCh1Angles.length, win.cyclePeakCh2Angles.length);
-
         // 6) repintar
         plot.requestPaint();
         plotCycles.requestPaint();
@@ -384,12 +383,12 @@ ApplicationWindow {
 
                 Rectangle { Layout.fillWidth: true; color: "transparent" }
 
-                Button {
-                    text: "Terminal"
-                    Layout.preferredHeight: 36; Layout.preferredWidth: 120; font.pixelSize: 14
-                    ToolTip.visible: hovered;
-                    ToolTip.text: "Permite la visualización de la terminal"
-                }
+                // Button {
+                //     text: "Terminal"
+                //     Layout.preferredHeight: 36; Layout.preferredWidth: 120; font.pixelSize: 14
+                //     ToolTip.visible: hovered;
+                //     ToolTip.text: "Permite la visualización de la terminal"
+                // }
 
                 Button {
                     text: "Herramientas"
@@ -439,10 +438,36 @@ ApplicationWindow {
                     ToolTip.text: "Alterna entre Curva (Ángulo vs Resistencia) y Ciclos (Picos vs tiempo)"
                 }
 
-                Switch { checked: win.active; onToggled: backend.setActive(checked) }
-                Label { text: win.active ? "Activo" : "Inactivo"; color: "white"; font.pixelSize: 14 }
+                Button {
+                    text: "Borrar ciclo"
+                    onClicked: {
+                        if (win.cycleIndex > 1){
+                            win.data = win.data.filter(dat => dat.cycle !== win.cycleIndex-cyclesDelete.length-1);
+                            win.dataCycleFilter = win.data.filter(dat => dat.cycle == win.cycleIndex-cyclesDelete.length-2);
 
-                //Button { text: "Salir"; onClicked: Qt.quit(); Layout.preferredHeight: 36; Layout.preferredWidth: 80; font.pixelSize: 14 }
+                            win.cyclePeakCh1Angles.pop()
+                            win.cyclePeakCh1Times.pop()
+                            win.cyclePeakCh2Angles.pop()
+                            win.cyclePeakCh2Times.pop()
+
+                            win.cyclePeakCh1CentroidAngles.pop()
+                            win.cyclePeakCh1CentroidTimes.pop()
+                            win.cyclePeakCh2CentroidAngles.pop()
+                            win.cyclePeakCh2CentroidTimes.pop()
+
+                            plot.requestPaint(); plotCycles.requestPaint();
+
+                            cyclesDelete.push(win.cycleIndex-1)
+                        }
+                    }
+                    Layout.preferredHeight: 36; Layout.preferredWidth: 120; font.pixelSize: 14
+                    ToolTip.visible: hovered
+                    ToolTip.text: "Elimina el último ciclo graficado"
+                }
+
+                Label { text: win.active ? "ACTIVO" : "DETENIDO";
+                color: '#ffffff'; font.pixelSize: 14; font.bold: true }
+
                 Button {
                     text: "Salir"
                     
@@ -504,6 +529,18 @@ ApplicationWindow {
                     Label { text: isFinite(win.measurementTime) ? win.measurementTime.toFixed(2) : "—"; color: "white"; font.pixelSize: 32; font.bold: true }
                 }
 
+                ColumnLayout {
+                    RowLayout {
+                        Label { text:"Ch1"; color: '#ffffff'; font.pixelSize: 14; font.bold: true }
+                        Switch { checked: win.viewCh1; onToggled: {win.viewCh1 = ! win.viewCh1; plot.requestPaint(); plotCycles.requestPaint()} }
+                    }
+
+                    RowLayout {
+                        Label { text:"Ch2"; color: '#ffffff'; font.pixelSize: 14; font.bold: true }
+                        Switch { checked: win.viewCh2; onToggled: {win.viewCh2 = ! win.viewCh2; plot.requestPaint(); plotCycles.requestPaint()} }
+                    }
+                }
+
                 Rectangle { Layout.fillWidth: true; color: "transparent" }
 
                 RowLayout {
@@ -536,7 +573,7 @@ ApplicationWindow {
                         Layout.preferredHeight: 45; Layout.preferredWidth: 120; font.pixelSize: 16
                     }
                     Button {
-                        text: "Limpiar todo"
+                        text: "Limpiar"
                         onClicked: {
                             win.data = []
                             win.dataCycle = []
@@ -560,6 +597,9 @@ ApplicationWindow {
                             win.minA = 9999.0; win.maxA = -9999.0
 
                             plot.requestPaint(); plotCycles.requestPaint()
+
+                            backend.changeTimer("reset")
+
                         }
                         Layout.preferredHeight: 45; Layout.preferredWidth: 120; font.pixelSize: 16
                     }
@@ -587,52 +627,65 @@ ApplicationWindow {
                 onPaint: {
                     const ctx = getContext("2d");
                     const W=width, H=height;
+
+                    // Limpieza de la pantalla
                     ctx.clearRect(0,0,W,H);
+                    //Creación de un rectangulo
                     ctx.fillStyle="#111827"; ctx.fillRect(0,0,W,H);
 
-                    const ml=100, mr=10, mt=10, mb=30;
-                    const pw=W-ml-mr, ph=H-mt-mb; if (pw<=0||ph<=0) return;
-
-                    // marco
-                    ctx.strokeStyle="#1f2937"; ctx.strokeRect(ml,mt,pw,ph);
-
-                    ctx.fillStyle="#9ca3af"; ctx.font="12px sans-serif"; ctx.textAlign="center";
-                    ctx.textAlign="center";
-                    ctx.fillText("Ángulo (°)", ml+pw/2, H);
-                    ctx.save(); ctx.translate(10, mt+ph/2+30); ctx.rotate(-Math.PI/2);
-
-                    if (win.deviceUnites === "resistance"){
-                        ctx.fillText("Resistencia (kΩ)", 0, 0); ctx.restore();
-                    } else if (win.deviceUnites === "current"){
-                        ctx.fillText("Corriente (mA)", 0, 0); ctx.restore();
+                    const mLeft=100, mRight=10, mTop=10, mBottom=35;
+                    const pw = W-mLeft-mRight, ph = H-mTop-mBottom;
+                    
+                    if (pw<=0 || ph<=0) {
+                        if (win.debugLogs) console.log(`El área útil es negativa: pw=${pw} ph=${ph}`);
+                        return;
                     }
                     
-                    const xmin=win.xMinDeg, xmax=win.xMaxDeg;
-                    const xspan=Math.max(1e-9,xmax-xmin);
-                    const xMap=(vx)=> ml + ((vx-xmin)/xspan)*pw;
+                    // Creación del marco
+                    ctx.strokeStyle="#1f2937"; ctx.strokeRect(mLeft,mTop,pw,ph);
+                    
+                    // Creación del label eje x
+                    ctx.fillStyle="#9ca3af"; ctx.font="12px sans-serif"; ctx.textAlign="center";
+                    ctx.fillText("Ángulo (°)", mLeft+pw/2, H);
 
+                    ctx.save(); ctx.translate(15, mTop+ph/2+30); ctx.rotate(-Math.PI/2);
+
+                    // Creación del label eje y
+                    if (win.deviceUnites === "resistance"){ctx.fillText("Resistencia (kΩ)", 0, 0);}
+                    else if (win.deviceUnites === "current"){ctx.fillText("Corriente (mA)", 0, 0);}
+                    ctx.restore();
+
+                    // Si no hay datos
                     if (win.dataCycleFilter.length === 0){
-                        ctx.fillStyle="#9ca3af"
+                        ctx.fillStyle="#9ca3af";
                         ctx.textAlign="left";
-                        ctx.fillText("Sin datos agregados aún…", ml+10, mt+20);
+                        ctx.fillText("Sin datos agregados aún…", mLeft+10, mTop+20);
                         return;
                     }
 
+                    // Mapeo de coordenadas max / min
+                    const xmin = win.xMinDeg, xmax = win.xMaxDeg;
+                    const xspan = Math.max(1e-9,xmax-xmin);
+                    const xMap = (vx)=> mLeft + ((vx-xmin)/xspan)*pw;
+
                     // eje Y auto
-                    let ymin=+Infinity,ymax=-Infinity;
-                    for (let i=0;i<win.dataCycleFilter.length;i++){
+                    let ymin = +Infinity, ymax = -Infinity;
+
+                    for (let i=0; i<win.dataCycleFilter.length; i++){
                         const d=win.dataCycleFilter[i];
-                        if (isFinite(d.ch1)){ymin=Math.min(ymin,d.ch1); ymax=Math.max(ymax,d.ch1);}
-                        if (isFinite(d.ch2)){ymin=Math.min(ymin,d.ch2); ymax=Math.max(ymax,d.ch2);}
+                        if (isFinite(d.ch1) && win.viewCh1){ymin=Math.min(ymin,d.ch1); ymax=Math.max(ymax,d.ch1);}
+                        if (isFinite(d.ch2) && win.viewCh2){ymin=Math.min(ymin,d.ch2); ymax=Math.max(ymax,d.ch2);}
                     }
-                    if (!(ymin<Infinity&&ymax>-Infinity)){ymin=0;ymax=1;}
-                    if (Math.abs(ymax-ymin)<1e-9) ymax=ymin+1.0;
-                    const pad=(ymax-ymin)*0.05; const yMin=ymin-pad, yMax=ymax+pad;
-                    const yMap=(vy)=> mt + ph*(1-(vy-yMin)/(yMax-yMin));
+
+                    if (!(ymin<Infinity && ymax>-Infinity)){ymin = 0; ymax = 1;}
+                    if (Math.abs(ymax-ymin)<1e-9) {ymax = ymin+0.5; ymin -= 0.5;}
+
+                    const pad = (ymax-ymin)*0.05; const yMin=ymin-pad, yMax = ymax+pad;
+                    const yMap = (vy)=> mTop + ph*(1-(vy-yMin)/(yMax-yMin));
 
                     // grilla H
                     ctx.strokeStyle="#253041"; ctx.lineWidth=1; ctx.beginPath();
-                    for (let gy=0; gy<=6; gy++){ const y=mt+ph*(gy/6); ctx.moveTo(ml,y); ctx.lineTo(ml+pw,y); }
+                    for (let gy=0; gy<=6; gy++){ const y=mTop+ph*(gy/6); ctx.moveTo(mLeft,y); ctx.lineTo(mLeft+pw,y); }
                     ctx.stroke();
 
                     // ticks X exactos
@@ -641,19 +694,19 @@ ApplicationWindow {
                     const lastTick=Math.floor(xmax/step)*step;
                     ctx.beginPath();
                     for (let v=firstTick; v<=lastTick+1e-9; v+=step){
-                        const x=xMap(v); ctx.moveTo(x,mt); ctx.lineTo(x,mt+ph);
+                        const x=xMap(v); ctx.moveTo(x,mTop); ctx.lineTo(x,mTop+ph);
                     }
                     ctx.strokeStyle="#253041"; ctx.stroke();
 
                     // etiquetas
                     ctx.fillStyle="#9ca3af"; ctx.font="12px sans-serif"; ctx.textAlign="center";
                     for (let v=firstTick; v<=lastTick+1e-9; v+=step){
-                        const x=xMap(v); ctx.fillText(v.toFixed(step<1?2:0), x, mt+ph+18);
+                        const x=xMap(v); ctx.fillText(v.toFixed(step<1?2:0), x, mTop+ph+18);
                     }
                     ctx.textAlign="right";
                     for (let gy=0; gy<=6; gy++){
-                        const vy=yMin+(yMax-yMin)*(gy/6); const y=mt+ph*(1-gy/6);
-                        ctx.fillText(vy.toFixed(3), ml-6, y+4);
+                        const vy=yMin+(yMax-yMin)*(gy/6); const y=mTop+ph*(1-gy/6);
+                        ctx.fillText(vy.toFixed(3), mLeft-6, y+4);
                     }
 
                     function drawPolyline(color, acc){
@@ -672,8 +725,10 @@ ApplicationWindow {
                             ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
                         }
                     }
-                    drawPolyline("#22c55e", d=>d.ch1);
-                    drawPolyline("#60a5fa", d=>d.ch2);
+                    
+                    
+                    if (win.viewCh1) {drawPolyline("#22c55e", d=>d.ch1);}
+                    if (win.viewCh2) {drawPolyline("#60a5fa", d=>d.ch2);}
                 }
             }
 
@@ -686,11 +741,16 @@ ApplicationWindow {
                 antialiasing: true
 
                 onPaint: {
-                    const ctx=getContext("2d"); const W=width, H=height;
-                    ctx.clearRect(0,0,W,H); ctx.fillStyle="#111827"; ctx.fillRect(0,0,W,H);
+                    const ctx=getContext("2d");
+                    const W=width, H=height;
 
-                    const ml=80,mr=10,mt=10,mb=30; const pw=W-ml-mr, ph=H-mt-mb;
-                    if (pw<=0||ph<=0) return;
+                    ctx.clearRect(0,0,W,H); // Limpieza de la pantalla
+                    ctx.fillStyle="#111827"; ctx.fillRect(0,0,W,H); //Creación de un rectangulo
+
+                    const ml=80,mr=10,mt=10,mb=30;
+                    const pw=W-ml-mr, ph=H-mt-mb;
+                    
+                    if (pw<=0||ph<=0) {console.log("Los margenes son"); return;}
 
                     // marco
                     ctx.strokeStyle="#1f2937"; ctx.strokeRect(ml,mt,pw,ph);
@@ -713,11 +773,12 @@ ApplicationWindow {
 
                     for (let i=0;i<n1;i++){
                         const v=win.cyclePeakCh1Times[i];
-                        if (isFinite(v)){xmin=Math.min(xmin,v); xmax=Math.max(xmax,v);}
+                        if (isFinite(v) && win.viewCh1){xmin=Math.min(xmin,v); xmax=Math.max(xmax,v);}
                     }
+
                     for (let i=0;i<n2;i++){
                         const v=win.cyclePeakCh2Times[i];
-                        if (isFinite(v)){xmin=Math.min(xmin,v); xmax=Math.max(xmax,v);}
+                        if (isFinite(v) && win.viewCh2){xmin=Math.min(xmin,v); xmax=Math.max(xmax,v);}
                     }
                     
                     if (Math.abs(xmax-xmin)<1e-6) xmax=xmin+1.0;
@@ -729,12 +790,13 @@ ApplicationWindow {
 
                     for (let i=0;i<n1;i++){
                         const v=win.cyclePeakCh1Angles[i];
-                        if (isFinite(v)){ymin=Math.min(ymin,v); ymax=Math.max(ymax,v);}
+                        if (isFinite(v) && win.viewCh1){ymin=Math.min(ymin,v); ymax=Math.max(ymax,v);}
                     }
                     for (let i=0;i<n2;i++){
                         const v=win.cyclePeakCh2Angles[i];
-                        if (isFinite(v)){ymin=Math.min(ymin,v); ymax=Math.max(ymax,v);}
+                        if (isFinite(v) && win.viewCh2){ymin=Math.min(ymin,v); ymax=Math.max(ymax,v);}
                     }
+
                     if (!(ymin<Infinity && ymax>-Infinity)) { ymin=win.xMinDeg; ymax=win.xMaxDeg;}
                     if (Math.abs(ymax-ymin)<1e-6) ymax=ymin+1.0;
                     const pady=(ymax-ymin)*0.08; ymin-=pady; ymax+=pady;
@@ -774,11 +836,15 @@ ApplicationWindow {
                             ctx.beginPath(); ctx.arc(x,y,3,0,Math.PI*2); ctx.fill();
                         }
                     }
-                    drawSeries("#22c55e", win.cyclePeakCh1Times, win.cyclePeakCh1Angles);
-                    drawSeries("#60a5fa", win.cyclePeakCh2Times, win.cyclePeakCh2Angles);
 
-                    drawSeries('#ec706c', win.cyclePeakCh1CentroidTimes, win.cyclePeakCh1CentroidAngles);
-                    drawSeries('#dac511', win.cyclePeakCh2CentroidTimes, win.cyclePeakCh2CentroidAngles);
+                    if (win.viewCh1) {
+                        drawSeries("#22c55e", win.cyclePeakCh1Times, win.cyclePeakCh1Angles);
+                        drawSeries('#ec706c', win.cyclePeakCh1CentroidTimes, win.cyclePeakCh1CentroidAngles);
+                    }
+                    if (win.viewCh2) {
+                        drawSeries("#60a5fa", win.cyclePeakCh2Times, win.cyclePeakCh2Angles);
+                        drawSeries('#dac511', win.cyclePeakCh2CentroidTimes, win.cyclePeakCh2CentroidAngles);
+                    }
                 }
             }
         }
@@ -894,9 +960,9 @@ ApplicationWindow {
                     // console.log("esta dentro del rango")
 
                     // Se agrega la nueva lectura en la lista data
-                    win.data.push({ time: tt, angle: a, ch1: v1, ch2: v2 });
+                    win.data.push({ cycle: win.cycleIndex, time: tt, angle: a, ch1: v1, ch2: v2 });
                     // Se agrega la lectura a dataCycle
-                    win.dataCycle.push({ time: tt, angle: a, ch1: v1, ch2: v2});
+                    win.dataCycle.push({ cycle: win.cycleIndex, time: tt, angle: a, ch1: v1, ch2: v2});
                 }
 
                 // FIN válido: bajada sostenida después de haber alcanzado fin, o salir por arriba
@@ -916,7 +982,7 @@ ApplicationWindow {
                     win.pendingCycleSnapshot = false;
                     win.collectingForward = false;
                     win.dataCycle = []
-                    win.cycleIndex = Math.max(win.cyclePeakCh1Angles.length, win.cyclePeakCh2Angles.length);
+                    win.cycleIndex += 1
                     if (win.debugLogs) console.log("[cycle] EXIT (finalized)");
                 } else if (abortByEarlyDec && win.pendingCycleSnapshot) {
                     if (win.debugLogs) console.warn("[cycle] EXIT ABORT (vuelta antes de fin)");
@@ -935,7 +1001,6 @@ ApplicationWindow {
                 // Guarda crudo
                 if (win.data.length > 0) {
                     backend.saveRawDataCsv(win.data);
-                    win.data = [];
                 }
                 // Guarda Ángulo vs Ciclo (usando las dos series)
                 if (win.cyclePeakCh1Times.length > 0 || win.cyclePeakCh2Times.length > 0) {

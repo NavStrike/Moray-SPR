@@ -27,9 +27,12 @@ try:
     data = accessData().data
     production_mode = data['production'] if data is not None else True
     print_debug(f"Modo de ejecución: {'PRODUCTION' if production_mode else 'DEVELOPMENT'}")
+    print("************************************")
 except:
     production_mode = True
     print_debug("No se pudo determinar el modo de ejecución, se asume PRODUCTION por defecto.")
+
+print("************************************")
 
 # En modo production, se fuerza el uso de Wayland para evitar problemas de rendimiento en Linux.
 if production_mode:
@@ -94,11 +97,17 @@ class Backend(QObject):
 
         # Estado interno
         self._active = False
+        self._use_ads = False
+
+        # Variables de tiempo
         self._t = 0.0
         self._dt = 0.001              # 1 ms ≈ 1 kHz
+
         self._t_init = 0.0
-        self._t_pres = 0.0
-        self._use_ads = False
+        self._t_present = 0.0
+        self._t_pause = 0.0
+        self._t_pause_init = []
+        self._t_pause_end = []
 
         # ESP32 Serial
         self._serial = False
@@ -358,7 +367,7 @@ class Backend(QObject):
             N  = max(n1, n2)
 
             with open(fpath, "w", newline="", encoding="utf-8") as f:
-                w = csv.writer(f)
+                w = csv.writer(f, delimiter=";")
                 w.writerow(["cycle_index", "ch1_time", "ch1_angle_deg", "ch2_time", "ch2_angle_deg"])
                 for i in range(N):
                     t1 = float(ch1_times[i]) if i < n1 else float("nan")
@@ -439,8 +448,7 @@ class Backend(QObject):
             except Exception:
                 continue
 
-        msg = "No se pudo abrir ningún puerto serial para ESP32. Defina ESP32_PORT."
-        print_error(msg)
+        print_error("No se pudo abrir ningún puerto serial para ESP32. Defina ESP32_PORT.")
         self.serialStatusChanged.emit("ESP32 desconectado")
 
     def _send_serial(self, data: str):
@@ -478,6 +486,21 @@ class Backend(QObject):
         except Exception as e:
             print_error(f"Error actualizando cero absoluto: {e}")
 
+    @Slot(str)
+    def changeTimer(self, op: str):
+        if op == "reset":
+            self._t_init = 0
+            self._t_pause_init = []
+            self._t_pause_init = []
+            self._t_pause = 0
+        elif op == "pause":
+            self._t_pause_init.append(time.perf_counter())
+        elif op == "continue":
+            if len(self._t_pause_init) - len(self._t_pause_end) == 1:
+                self._t_pause_end.append(time.perf_counter())
+                self._t_pause += self._t_pause_end[-1] - self._t_pause_init[-1]
+
+
     @Slot(bool)
     def setActive(self, on: bool):
         if self._active == on:
@@ -485,7 +508,9 @@ class Backend(QObject):
         self._active = on
         if on:
             print_info("Iniciando adquisición de datos...")
-            self.timer.start()
+            self. changeTimer("continue") # continuación el timer de adquisición
+            self.timer.start()  # inicio del timer de adquisición
+
             try:
                 if self.laser is not None:
                     self.laser.on()
@@ -497,7 +522,9 @@ class Backend(QObject):
             
         else:
             print_info("Deteniendo adquisición de datos...")
-            self.timer.stop()
+            self. changeTimer("pause") # pausa el timer de adquisición
+            self.timer.stop()   # pausa del timer de adquisición
+            
             try:
                 if self.laser is not None:
                     self.laser.off()
@@ -580,6 +607,11 @@ class Backend(QObject):
         print_info(f"Corriente actualizada: {self.current}")
 
     @Slot(str)
+    def setNameFile(self, name: str):
+        self.saveDataName = name
+        print("El nombre del archivo ha sido asignado a:", name)
+
+    @Slot(str)
     def setAdqDevice(self, device: str):
         if device not in ["ldr", "photodetector"]:
             print_warning(f"Dispositivo de adquisición desconocido: {device}")
@@ -655,9 +687,9 @@ class Backend(QObject):
         self._t += self._dt
 
         if self._t_init == 0: self._t_init = time.perf_counter()
-        else: self._t_pres = time.perf_counter()
+        else: self._t_present = time.perf_counter()
         
-        diff_time = self._t_pres - self._t_init
+        diff_time = self._t_present - self._t_init - self._t_pause
 
         if self._serial:
             self._poll_serial()
@@ -681,8 +713,8 @@ class Backend(QObject):
         if self._use_ads:
             try:
                 noise_voltage = float(self.chanRef0.voltage) - 3.3/2.0
-                ch1_voltage = float(self.chan0.voltage)
-                ch2_voltage = float(self.chan1.voltage)
+                ch1_voltage = float(self.chan0.voltage) - noise_voltage
+                ch2_voltage = float(self.chan1.voltage) - noise_voltage
 
                 if ch1_voltage > self._vcc:
                     print_warning("El voltaje del canal 1 es mayor a 3.3V")
