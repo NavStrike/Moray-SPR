@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name = SPR Application B
+Comment = Aplicación para usar el sensor SPR
+Exec = /home/pi/spr/executables/init_b.sh
+Icon = /home/pi/spr/executables/moray_logo.png
+Terminal  = false
+Type = Application
+Categories = Science; Utility;

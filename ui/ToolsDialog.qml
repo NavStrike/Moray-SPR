@@ -1,17 +1,18 @@
-import QtQuick 6.0
-import QtQuick.Controls 6.0
-import QtQuick.Layouts 6.0
-import QtQuick.Window 6.0
+// ===== IMPORTS =====
+import QtQuick 2.15
+import QtQuick.Controls 2.15
+import QtQuick.Layouts 1.15
+import QtQuick.Window 2.15
 import QtQuick.Dialogs 6.0
 
-Dialog {
+Page {
     //-- textFiel que está seleccionado
     property TextField activeInput: null
     property bool activeMayus: false
 
     id: winTools
     title: "Herramientas adicionales"
-    modal: true
+    // modal: true
     width: parent.width
     height: parent.height
     padding: 20
@@ -20,7 +21,7 @@ Dialog {
     header: null
 
     // Evita el cierre automático al hacer clic fuera del cuadro
-    closePolicy: Popup.NoAutoClose
+    // closePolicy: Popup.NoAutoClose
 
     // Posición centrada
     x: (parent.width - width) / 2

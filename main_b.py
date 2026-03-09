@@ -156,7 +156,7 @@ class Backend(QObject):
         # ---------------------------------------------
         # Inicializacion de hardware
         # ---------------------------------------------
-        
+
         # LED (láser) opcional
         self.laser = None
         if _led_available:
@@ -248,7 +248,7 @@ class Backend(QObject):
             print_info("Variables cargadas correctamente para QML")
         except Exception as e:
             print_error(f"Error cargando variables para QML: {e}")
-    
+
     # ===== Lectura de datos guardados =====
     def _setValues(self):
         p1 = accessData().data
@@ -273,11 +273,11 @@ class Backend(QObject):
         subs = p2["data"]
         self.listSubstances = [s["name"] for s in subs]; self.listSubstances.insert(0,"Otra sustancia")
         self.anglesSubstances = [s["spr_angles"] for s in subs]; self.anglesSubstances.insert(0,[0, 0])
-    
+
     # ===== Utilidades de exportación =====
     def _exports_dir(self) -> Path:
         if self.saveDataName:
-            out_dir = Path(__file__).parent / self.saveDataPath / self.saveDataName 
+            out_dir = Path(__file__).parent / self.saveDataPath / self.saveDataName
         else:
             out_dir = Path(__file__).parent / self.saveDataPath
 
@@ -291,7 +291,7 @@ class Backend(QObject):
             return datetime.now().strftime("%H:%M:%S")
         else:
             return datetime.now().strftime("%Y%m%d_%H%M%S")
-        
+
     @Slot(list, list, list, list)
     def saveJSON(self, data, dataProcessed, maxMinAngles, maxMinSpeeds):
         try:
@@ -335,13 +335,14 @@ class Backend(QObject):
 
             with open(fpath, "w", newline="", encoding="utf-8") as f:
                 w = csv.writer(f, delimiter=";")
-                w.writerow(["time", "angle", "ch1", "ch2"])
+                w.writerow(["n_cycle", "time", "angle", "ch1", "ch2"])
                 for row in data_list:
+                    cycle = int(row.get("cycle", float("nan")))
                     time = float(row.get("time", float("nan")))
                     angle = float(row.get("angle", float("nan")))
                     ch1   = float(row.get("ch1",   float("nan")))
                     ch2   = float(row.get("ch2",   float("nan")))
-                    w.writerow([time, angle, ch1, ch2])
+                    w.writerow([cycle, time, angle, ch1, ch2])
             self.csvSaved.emit(str(fpath))
             print_info(f"[EXPORT] CSV crudo guardado: {fpath}")
         except Exception as e:
@@ -766,7 +767,7 @@ def main():
 
     app.aboutToQuit.connect(_cleanup)
     
-    qml_path = Path(__file__).parent / "ui" / "LDRMonitor_maximo_b.qml"
+    qml_path = Path(__file__).parent / "ui" / "main.qml"
     
     print_info(f"Cargando interfaz: {qml_path}")
     engine.load(str(qml_path))

@@ -6,15 +6,15 @@ import QtQuick.Window 6.0
 import QtQuick.Dialogs 6.0
 
 // ===== LDR Monitor =====
-ApplicationWindow {
+Page {
     id: win
     visible: true
-    visibility: Window.FullScreen
-    //visibility: Window.Maximized
+    // visibility: Window.FullScreen
+    // visibility: Window.Maximized
     width: 800
     height: 480
     title: "LDR Monitor"
-    color: "#0f172a"
+    // color: "#0f172a"
     palette.buttonText: "black"
     
     // ===== Otras ventanas importadas =====
