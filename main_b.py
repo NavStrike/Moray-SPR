@@ -167,7 +167,7 @@ class Backend(QObject):
                 print(f"No se pudo inicializar LED: {e}")
                 self.laser = None
 
-        if _serial_available:
+        if _serial_available and production_mode:
             self._open_serial()
         else:
             print_warning("Serial ESP32 deshabilitado (pyserial no disponible)")
@@ -767,7 +767,7 @@ def main():
 
     app.aboutToQuit.connect(_cleanup)
     
-    qml_path = Path(__file__).parent / "ui" / "main.qml"
+    qml_path = Path(__file__).parent / "ui" / "app.qml"
     
     print_info(f"Cargando interfaz: {qml_path}")
     engine.load(str(qml_path))

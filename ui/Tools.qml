@@ -11,32 +11,22 @@ Page {
     property bool activeMayus: false
 
     id: winTools
-    title: "Herramientas adicionales"
-    // modal: true
-    width: parent.width
-    height: parent.height
-    padding: 20
+    visible: win.viewPage === "tools" 
+    title: "Herramientas"
+    Layout.fillWidth: true
+    Layout.fillHeight: true
 
-    // Evita visivilidad del encabezado
-    header: null
+    // ===== Otras ventanas importadas =====
+    AnglesDialog {id: winAngles}
+    SpeedsDialog {id: winSpeeds}
 
-    // Evita el cierre automático al hacer clic fuera del cuadro
-    // closePolicy: Popup.NoAutoClose
-
-    // Posición centrada
-    x: (parent.width - width) / 2
-    y: (parent.height - height) / 2
-
-    background: Rectangle {
+    Rectangle {
         anchors.fill: parent
         color: "#111827"
-        border.color: "#1f2937"
-        border.width: 2
-        radius: 15
-    }
 
-    ColumnLayout{
+        ColumnLayout{
         anchors.fill: parent
+        anchors.margins: 16
         spacing: 8
         layoutDirection: Qt.LeftToRight
 
@@ -69,12 +59,51 @@ Page {
                 Button {
                     text: "Fijar nuevo cero"
                     enabled: !win.active
+                    Layout.preferredHeight: 36; Layout.preferredWidth: 130; font.pixelSize: 14
                     onClicked: backend.setRelativeZero()
-                    Layout.preferredHeight: 36
-                    Layout.preferredWidth: 130
-                    font.pixelSize: 14
-                    //ToolTip.visible: hovered
-                    //ToolTip.text: "Captura el ángulo absoluto actual como cero (ZC)"
+                }
+            }
+
+            RowLayout{
+                Layout.fillWidth: true
+                spacing: 5
+
+                Label{
+                    text: "Establece los ángulos máximo y mínimo de barrido: "
+                    color: "white" 
+                    font.bold: true; font.pixelSize: 20
+                }
+
+                Button {
+                    text: "Definir angulos"
+                    enabled: !win.active
+                    Layout.preferredHeight: 36; Layout.preferredWidth: 120; font.pixelSize: 14
+                    onClicked: {
+                        backend.viewAngles()   // solicita los ángulos actuales al backend
+                        backend.viewSubstance() // Solicita el nombre de la sustancia actual
+                        winAngles.open()
+                    }
+                }
+            }
+
+            RowLayout{
+                Layout.fillWidth: true
+                spacing: 5
+
+                Label{
+                    text: "Establece las velocidades máximo y mínimo de barrido: "
+                    color: "white" 
+                    font.bold: true; font.pixelSize: 20
+                }
+
+                Button {
+                    text: "Definir velocidades"
+                    enabled: !win.active
+                    Layout.preferredHeight: 36; Layout.preferredWidth: 130; font.pixelSize: 14
+                    onClicked: {
+                        backend.viewSpeeds()   // solicita las velocidades actuales al backend
+                        winSpeeds.open()
+                    }
                 }
             }
 
@@ -91,15 +120,13 @@ Page {
                 Button {
                     text: win.device === "ldr" ? "Cambiar a fotodetector" : "Cambiar a LDR" 
                     enabled: !win.active
+                    Layout.preferredHeight: 36; Layout.preferredWidth: 160; font.pixelSize: 14
                     onClicked: {
                         win.device = win.device === "ldr" ? "photodetector" : "ldr";
                         win.deviceUnites = win.device === "ldr" ? "resistance" : "current";
                         win.update();
                         backend.setAdqDevice(win.device);
                     }
-                    Layout.preferredHeight: 36
-                    Layout.preferredWidth: 160
-                    font.pixelSize: 14
                 }
             }
 
@@ -111,7 +138,19 @@ Page {
                     text: "Guardar datos adquiridos: "
                     color: "white" 
                     font.bold: true; font.pixelSize: 20
-                } 
+                }
+
+                TextField {
+                    id: nameFile
+                    text: ""
+                    font.pixelSize: 20
+                    Layout.preferredWidth: 150
+                    Layout.preferredHeight: 36
+                    horizontalAlignment: TextInput.AlignHCenter
+                    verticalAlignment: TextInput.AlignVCenter
+                    onActiveFocusChanged: if(activeFocus) activeInput = nameFile
+                }
+
                 Button {
                     text: "Guardar datos" 
                     enabled: !win.active
@@ -132,28 +171,6 @@ Page {
                 spacing: 5
 
                 Label{
-                    text: "Nombre de la carpeta:"
-                    color: "white" 
-                    font.bold: true; font.pixelSize: 20
-                    Layout.preferredHeight: 36
-                }
-
-                TextField {
-                    id: nameFile
-                    text: ""
-                    font.pixelSize: 20
-                    Layout.preferredWidth: 150
-                    Layout.preferredHeight: 36
-                    onActiveFocusChanged: if(activeFocus) activeInput = nameFile
-
-                }
-            }
-
-            RowLayout{
-                Layout.fillWidth: true
-                spacing: 5
-
-                Label{
                     text: "Modificar la corriente del motor:"
                     color: "white" 
                     font.bold: true; font.pixelSize: 20
@@ -166,6 +183,8 @@ Page {
                     font.pixelSize: 15
                     Layout.preferredWidth: 150
                     Layout.preferredHeight: 36
+                    horizontalAlignment: TextInput.AlignHCenter
+                    verticalAlignment: TextInput.AlignVCenter
                     onActiveFocusChanged: if(activeFocus) activeInput = textMotorCurrent
                 }
 
@@ -176,27 +195,6 @@ Page {
                     Layout.preferredHeight: 36
                     Layout.preferredWidth: 160
                     font.pixelSize: 14
-                }
-            }
-                
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 10
-
-                Button1 {
-                    text: "Salir"
-                    //font.pixelSize: 14
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 40
-                    onClicked: winTools.reject()
-                }
-
-                Button1 {
-                    text: "Aceptar"
-                    //font.pixelSize: 14
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 40
-                    onClicked: winTools.accept()
                 }
             }
         }
@@ -258,7 +256,7 @@ Page {
                 Button1 {text: "_"; onClicked: {addCharacter("_")}}
                 Button1 {text: "-"; onClicked: {addCharacter("-")}}
                 Button1 {text: "Borrar"; onClicked: {activeInput.text = ""; activeInput.color = "black"}}
-                Button1 {text: activeMayus ? "May" : "Min"; onClicked: {activeMayus = ! activeMayus;}}
+                Button1 {text: activeMayus ? "Min" : "May"; onClicked: {activeMayus = ! activeMayus;}}
 
                 Button1 {text: "1"; onClicked: {addCharacter("1")}}
                 Button1 {text: "0"; onClicked: {addCharacter("0")}}
@@ -266,6 +264,8 @@ Page {
                 Button1 {text: "Borrar"; onClicked: {activeInput.text = ""; activeInput.color = "black"}}
             }
         }
+    }
+
     }
 
     function addCharacter (letter){
