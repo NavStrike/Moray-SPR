@@ -105,11 +105,6 @@ ApplicationWindow {
     property var cyclePeakCh2Angles: []
     property var cyclePeakCh2Times: []
 
-    property var cyclePeakCh1CentroidAngles: []
-    property var cyclePeakCh1CentroidTimes: []
-    property var cyclePeakCh2CentroidAngles: []
-    property var cyclePeakCh2CentroidTimes: []
-
     // Labels de los picos (peaks) de la curva agregada actual
     // Format -> [Angle, Value, Time]
     property real peakCh1Angle: NaN
@@ -300,11 +295,6 @@ ApplicationWindow {
         win.peakCh2Value = (isFinite(best2.val) ? best2.val : NaN);
         win.cyclePeakCh2Times.push(best2.time);
         win.cyclePeakCh2Angles.push(best2.angle);
-
-        win.cyclePeakCh1CentroidTimes.push(best1_centroid.time);
-        win.cyclePeakCh1CentroidAngles.push(best1_centroid.angle);
-        win.cyclePeakCh2CentroidTimes.push(best2_centroid.time);
-        win.cyclePeakCh2CentroidAngles.push(best2_centroid.angle);
     }
 
     function resetValues(){
@@ -450,11 +440,6 @@ ApplicationWindow {
                             win.cyclePeakCh2Angles.pop()
                             win.cyclePeakCh2Times.pop()
 
-                            win.cyclePeakCh1CentroidAngles.pop()
-                            win.cyclePeakCh1CentroidTimes.pop()
-                            win.cyclePeakCh2CentroidAngles.pop()
-                            win.cyclePeakCh2CentroidTimes.pop()
-
                             plot.requestPaint(); plotCycles.requestPaint();
 
                             cyclesDelete.push(win.cycleIndex-1)
@@ -564,6 +549,25 @@ ApplicationWindow {
                         Layout.preferredHeight: 45; Layout.preferredWidth: 120; font.pixelSize: 16
                     }
                     Button {
+                        text: "Iniciar"
+                        enabled: !win.active
+                        onClicked: {
+                            win.prevAngle = NaN
+                            win.collectingForward = false
+                            win.pendingCycleSnapshot = true
+                            win.dataCycle = []
+
+                            // reset robustez
+                            win.incStreak = 0; win.decStreak = 0
+                            win.sawStartGate = false; win.sawEndGate = false
+                            win.minA = 9999.0; win.maxA = -9999.0
+
+                            backend.setActive(true)
+                            if (win.debugLogs) console.log("[cycle] START IDA")
+                        }
+                        Layout.preferredHeight: 45; Layout.preferredWidth: 120; font.pixelSize: 16
+                    }
+                    Button {
                         text: "Detener"
                         enabled: win.active
                         onClicked: {
@@ -582,11 +586,6 @@ ApplicationWindow {
                             win.cyclePeakCh1Times = []
                             win.cyclePeakCh2Angles = []
                             win.cyclePeakCh2Times = []
-
-                            win.cyclePeakCh1CentroidTimes = []
-                            win.cyclePeakCh1CentroidAngles = []
-                            win.cyclePeakCh2CentroidTimes = []
-                            win.cyclePeakCh2CentroidAngles = []
 
                             win.cycleIndex = 0
                             win.peakCh1Time = NaN; win.peakCh1Angle = NaN; win.peakCh1Value = NaN
@@ -837,14 +836,8 @@ ApplicationWindow {
                         }
                     }
 
-                    if (win.viewCh1) {
-                        drawSeries("#22c55e", win.cyclePeakCh1Times, win.cyclePeakCh1Angles);
-                        drawSeries('#ec706c', win.cyclePeakCh1CentroidTimes, win.cyclePeakCh1CentroidAngles);
-                    }
-                    if (win.viewCh2) {
-                        drawSeries("#60a5fa", win.cyclePeakCh2Times, win.cyclePeakCh2Angles);
-                        drawSeries('#dac511', win.cyclePeakCh2CentroidTimes, win.cyclePeakCh2CentroidAngles);
-                    }
+                    if (win.viewCh1) {drawSeries("#22c55e", win.cyclePeakCh1Times, win.cyclePeakCh1Angles);}
+                    if (win.viewCh2) {drawSeries("#60a5fa", win.cyclePeakCh2Times, win.cyclePeakCh2Angles);}
                 }
             }
         }
@@ -888,6 +881,9 @@ ApplicationWindow {
                         font.bold: true
                     }
                 }
+
+                Rectangle { Layout.fillWidth: true; color: "transparent" }
+
                 ColumnLayout {
                     Label {
                         text: `${win.realTime}`;
