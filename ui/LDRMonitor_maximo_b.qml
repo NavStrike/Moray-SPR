@@ -82,7 +82,7 @@ ApplicationWindow {
     property bool pendingCycleSnapshot: false
 
     // Número de ciclo actual
-    property int cycleIndex: 1
+    property int cycleIndex: 0
 
     // Ciclos borrados
     property var cyclesDelete: []
@@ -131,7 +131,28 @@ ApplicationWindow {
     property real maxA: -9999.0         // máximo ángulo dentro del ciclo
     // ========================================
 
-    // ===== Variables de prueba =====
+    // ===== Adicionales =====
+    function scaleTime(time){
+        if(isFinite(time)){
+            let sec = Math.floor(time%60), msec = Math.floor((time*60)%60);
+            let min = Math.floor(time/60), hour = Math.floor(min/60);
+            let _time = [msec, sec, min, hour].map( item =>
+                item < 10 ? `0${item}` : item
+            )
+            if(hour>=1){return `${_time[3]}:${_time[2]}`}
+            else if(min>=1){return `${_time[2]}:${_time[1]}`}
+            else {return `${_time[1]}:${_time[0]}`}
+        } else {return time}
+    }
+
+    function scaleUnitesTime(time){
+        if(isFinite(time)){
+            let seg = time%60; let min = time/60; let hor = min/60;
+            if(hor>=1){return "(h)"}
+            else if(min>=1){return "(m)"}
+            else {return "(s)"}
+        } else {return "-"}
+    }
 
     // === helpers estadísticos ===
     // Filtro de mediana
@@ -431,9 +452,9 @@ ApplicationWindow {
                 Button {
                     text: "Borrar ciclo"
                     onClicked: {
-                        if (win.cycleIndex > 1){
-                            win.data = win.data.filter(dat => dat.cycle !== win.cycleIndex-cyclesDelete.length-1);
-                            win.dataCycleFilter = win.data.filter(dat => dat.cycle == win.cycleIndex-cyclesDelete.length-2);
+                        if (win.cycleIndex > 0){
+                            win.data = win.data.filter(dat => dat.cycle !== win.cycleIndex-cyclesDelete.length);
+                            win.dataCycleFilter = win.data.filter(dat => dat.cycle == win.cycleIndex-cyclesDelete.length-1);
 
                             win.cyclePeakCh1Angles.pop()
                             win.cyclePeakCh1Times.pop()
@@ -442,7 +463,7 @@ ApplicationWindow {
 
                             plot.requestPaint(); plotCycles.requestPaint();
 
-                            cyclesDelete.push(win.cycleIndex-1)
+                            cyclesDelete.push(win.cycleIndex)
                         }
                     }
                     Layout.preferredHeight: 36; Layout.preferredWidth: 120; font.pixelSize: 14
@@ -481,7 +502,7 @@ ApplicationWindow {
 
                 ColumnLayout {
                     Label { 
-                        text: deviceUnites === "resistance" ? "CH1 Resistencia (kΩ)": "CH1 Corriente (mA)";
+                        text: deviceUnites === "resistance" ? "CH1 (kΩ)": "CH1 (mA)";
                         color: "#22c55e";
                         font.pixelSize: 14;
                         font.bold: true
@@ -496,7 +517,7 @@ ApplicationWindow {
 
                 ColumnLayout {
                     Label {
-                        text: deviceUnites === "resistance" ? "CH2 Resistencia (kΩ)": "CH2 Corriente (mA)";
+                        text: deviceUnites === "resistance" ? "CH2 (kΩ)": "CH2 (mA)";
                         color: "#60a5fa";
                         font.pixelSize: 14;
                         font.bold: true
@@ -509,19 +530,25 @@ ApplicationWindow {
                 }
 
                 ColumnLayout {
-                    Label { text:"Tiempo (s)";
+                    Label { text:"Tiempo" + scaleUnitesTime(win.measurementTime);
                     color: "#fbbf24"; font.pixelSize: 14; font.bold: true }
-                    Label { text: isFinite(win.measurementTime) ? win.measurementTime.toFixed(2) : "—"; color: "white"; font.pixelSize: 32; font.bold: true }
+                    Label { text: isFinite(win.measurementTime) ? scaleTime(win.measurementTime) : "—"; color: "white"; font.pixelSize: 32; font.bold: true }
+                }
+
+                ColumnLayout {
+                    Label { text:"N ciclos";
+                    color: '#fa5d35'; font.pixelSize: 14; font.bold: true }
+                    Label { text: isFinite(win.cycleIndex) ? win.cycleIndex : "—"; color: "white"; font.pixelSize: 32; font.bold: true }
                 }
 
                 ColumnLayout {
                     RowLayout {
-                        Label { text:"Ch1"; color: '#ffffff'; font.pixelSize: 14; font.bold: true }
+                        Label { text:"Ch1"; color: '#22c55e'; font.pixelSize: 14; font.bold: true }
                         Switch { checked: win.viewCh1; onToggled: {win.viewCh1 = ! win.viewCh1; plot.requestPaint(); plotCycles.requestPaint()} }
                     }
 
                     RowLayout {
-                        Label { text:"Ch2"; color: '#ffffff'; font.pixelSize: 14; font.bold: true }
+                        Label { text:"Ch2"; color: '#60a5fa'; font.pixelSize: 14; font.bold: true }
                         Switch { checked: win.viewCh2; onToggled: {win.viewCh2 = ! win.viewCh2; plot.requestPaint(); plotCycles.requestPaint()} }
                     }
                 }
@@ -546,26 +573,7 @@ ApplicationWindow {
                             backend.setActive(true)
                             if (win.debugLogs) console.log("[cycle] START IDA")
                         }
-                        Layout.preferredHeight: 45; Layout.preferredWidth: 120; font.pixelSize: 16
-                    }
-                    Button {
-                        text: "Iniciar"
-                        enabled: !win.active
-                        onClicked: {
-                            win.prevAngle = NaN
-                            win.collectingForward = false
-                            win.pendingCycleSnapshot = true
-                            win.dataCycle = []
-
-                            // reset robustez
-                            win.incStreak = 0; win.decStreak = 0
-                            win.sawStartGate = false; win.sawEndGate = false
-                            win.minA = 9999.0; win.maxA = -9999.0
-
-                            backend.setActive(true)
-                            if (win.debugLogs) console.log("[cycle] START IDA")
-                        }
-                        Layout.preferredHeight: 45; Layout.preferredWidth: 120; font.pixelSize: 16
+                        Layout.preferredHeight: 45; Layout.preferredWidth: 100; font.pixelSize: 16
                     }
                     Button {
                         text: "Detener"
@@ -574,7 +582,7 @@ ApplicationWindow {
                             backend.setActive(false)
                             // El guardado ocurre en onActiveChanged(false)
                         }
-                        Layout.preferredHeight: 45; Layout.preferredWidth: 120; font.pixelSize: 16
+                        Layout.preferredHeight: 45; Layout.preferredWidth: 100; font.pixelSize: 16
                     }
                     Button {
                         text: "Limpiar"
@@ -600,7 +608,7 @@ ApplicationWindow {
                             backend.changeTimer("reset")
 
                         }
-                        Layout.preferredHeight: 45; Layout.preferredWidth: 120; font.pixelSize: 16
+                        Layout.preferredHeight: 45; Layout.preferredWidth: 100; font.pixelSize: 16
                     }
                 }
             }
@@ -608,11 +616,19 @@ ApplicationWindow {
 
         // ===== Gráficas =====
         Rectangle {
+            id: grafics
             Layout.fillWidth: true
             Layout.fillHeight: true
             radius: 12
             color: "#111827"
             border.color: "#1f2937"; border.width: 1
+
+            // Factor de zoom
+            property real zoomCurve: 1.0
+            property real zoomCycles: 1.0
+            
+            property real minZoom: 0.5
+            property real maxZoom: 100.0
 
             // ---- Resistencia (kΩ) | Corrriente (mA) vs Ángulo (°) ----
             Canvas {
@@ -629,6 +645,8 @@ ApplicationWindow {
 
                     // Limpieza de la pantalla
                     ctx.clearRect(0,0,W,H);
+                    ctx.save();
+
                     //Creación de un rectangulo
                     ctx.fillStyle="#111827"; ctx.fillRect(0,0,W,H);
 
@@ -663,8 +681,13 @@ ApplicationWindow {
                     }
 
                     // Mapeo de coordenadas max / min
-                    const xmin = win.xMinDeg, xmax = win.xMaxDeg;
-                    const xspan = Math.max(1e-9,xmax-xmin);
+                    let origXmin = win.xMinDeg, origXmax = win.xMaxDeg;
+                    let xCenter = (origXmin + origXmax) / 2;
+                    let xSpanZoomed = (origXmax - origXmin) / grafics.zoomCurve; // Aplicamos el zoom al rango
+
+                    const xmin = xCenter - xSpanZoomed / 2;
+                    const xmax = xCenter + xSpanZoomed / 2;
+                    const xspan = Math.max(1e-9, xmax - xmin);
                     const xMap = (vx)=> mLeft + ((vx-xmin)/xspan)*pw;
 
                     // eje Y auto
@@ -679,7 +702,15 @@ ApplicationWindow {
                     if (!(ymin<Infinity && ymax>-Infinity)){ymin = 0; ymax = 1;}
                     if (Math.abs(ymax-ymin)<1e-9) {ymax = ymin+0.5; ymin -= 0.5;}
 
-                    const pad = (ymax-ymin)*0.05; const yMin=ymin-pad, yMax = ymax+pad;
+                    const pad = (ymax-ymin)*0.05;
+                    let origYMin = ymin-pad, origYMax = ymax+pad;
+                    
+                    // Aplicamos el zoom matemático al eje Y
+                    let yCenter = (origYMin + origYMax) / 2;
+                    let ySpanZoomed = (origYMax - origYMin) / grafics.zoomCurve;
+                    
+                    const yMin = yCenter - ySpanZoomed / 2;
+                    const yMax = yCenter + ySpanZoomed / 2;
                     const yMap = (vy)=> mTop + ph*(1-(vy-yMin)/(yMax-yMin));
 
                     // grilla H
@@ -744,6 +775,9 @@ ApplicationWindow {
                     const W=width, H=height;
 
                     ctx.clearRect(0,0,W,H); // Limpieza de la pantalla
+
+                    ctx.save(); // Guardar estado antes de aplicar zoom
+                    
                     ctx.fillStyle="#111827"; ctx.fillRect(0,0,W,H); //Creación de un rectangulo
 
                     const ml=80,mr=10,mt=10,mb=30;
@@ -757,6 +791,7 @@ ApplicationWindow {
                     ctx.fillStyle="#9ca3af"; ctx.font="12px sans-serif"; ctx.textAlign="center";
                     ctx.fillText("Tiempo", ml+pw/2, H);
                     ctx.save(); ctx.translate(16, mt+ph/2); ctx.rotate(-Math.PI/2);
+
                     ctx.fillText("Ángulo del máximo (°)", 0, 0); ctx.restore();
 
                     const n1=win.cyclePeakCh1Angles.length, n2=win.cyclePeakCh2Angles.length;
@@ -781,7 +816,15 @@ ApplicationWindow {
                     }
                     
                     if (Math.abs(xmax-xmin)<1e-6) xmax=xmin+1.0;
-                    const padx=(xmax-xmin)*0.08; xmin-=padx; xmax+=padx;
+                    const padx=(xmax-xmin)*0.08; 
+                    let origXmin = xmin-padx, origXmax = xmax+padx;
+                    
+                    // Matemática del zoom X
+                    let xCenter = (origXmin + origXmax) / 2;
+                    let xSpanZoomed = (origXmax - origXmin) / grafics.zoomCycles;
+                    xmin = xCenter - xSpanZoomed / 2;
+                    xmax = xCenter + xSpanZoomed / 2;
+                    
                     const xMap = (vx) => ml + ((vx-xmin)/(xmax - xmin))*pw;
 
                     // Autoescalado eje Y
@@ -798,7 +841,15 @@ ApplicationWindow {
 
                     if (!(ymin<Infinity && ymax>-Infinity)) { ymin=win.xMinDeg; ymax=win.xMaxDeg;}
                     if (Math.abs(ymax-ymin)<1e-6) ymax=ymin+1.0;
-                    const pady=(ymax-ymin)*0.08; ymin-=pady; ymax+=pady;
+                    const pady=(ymax-ymin)*0.08; 
+                    let origYmin = ymin-pady, origYmax = ymax+pady;
+
+                    // Matemática del zoom Y
+                    let yCenter = (origYmin + origYmax) / 2;
+                    let ySpanZoomed = (origYmax - origYmin) / grafics.zoomCycles;
+                    ymin = yCenter - ySpanZoomed / 2;
+                    ymax = yCenter + ySpanZoomed / 2;
+
                     const yMap=(vy)=> mt + ph*(1-(vy-ymin)/(ymax-ymin));
 
                     // grilla
@@ -840,6 +891,48 @@ ApplicationWindow {
                     if (win.viewCh2) {drawSeries("#60a5fa", win.cyclePeakCh2Times, win.cyclePeakCh2Angles);}
                 }
             }
+
+            PinchArea {
+                anchors.fill: parent
+
+                onPinchStarted: console.log("Pinch iniciado")
+                onPinchFinished: console.log("Pinch finalizado")
+                
+                onPinchUpdated: (pinch) => {
+                    // Actualizar zoom basado en el gesto de pinza
+                    if (win.viewMode === "curve") {
+                        var newZoom = grafics.zoomCurve * pinch.scale / pinch.previousScale;
+                    } 
+                    else if (win.viewMode === "cycles") {
+                        var newZoom = grafics.zoomCycles * pinch.scale / pinch.previousScale;
+                    }
+                                       
+                    // Limitar entre min y max
+                    if (newZoom > grafics.minZoom && newZoom < grafics.maxZoom) {
+                        if (win.viewMode === "curve") {grafics.zoomCurve = newZoom; plot.requestPaint();} 
+                        else if (win.viewMode === "cycles") {grafics.zoomCycles = newZoom; plotCycles.requestPaint();}
+                    }
+                }
+
+                // Este MouseArea detecta el doble toque para resetear el zoom
+                MouseArea {
+                    anchors.fill: parent
+                    // Permitimos que los eventos pasen a otros elementos (como el PinchArea)
+                    propagateComposedEvents: true 
+                    
+                    onDoubleClicked: {
+                        if (win.viewMode === "curve") {
+                            grafics.zoomCurve = 1.0; // Restaurar variable a 1
+                            plot.requestPaint();     // Redibujar
+                        } 
+                        else if (win.viewMode === "cycles") {
+                            grafics.zoomCycles = 1.0; // Restaurar variable a 1
+                            plotCycles.requestPaint(); // Redibujar
+                        }
+                    }
+                }
+            }
+
         }
 
         // ===== Labels de máximos de la curva agregada =====
@@ -956,9 +1049,9 @@ ApplicationWindow {
                     // console.log("esta dentro del rango")
 
                     // Se agrega la nueva lectura en la lista data
-                    win.data.push({ cycle: win.cycleIndex, time: tt, angle: a, ch1: v1, ch2: v2 });
+                    win.data.push({ cycle: win.cycleIndex+1, time: tt, angle: a, ch1: v1, ch2: v2 });
                     // Se agrega la lectura a dataCycle
-                    win.dataCycle.push({ cycle: win.cycleIndex, time: tt, angle: a, ch1: v1, ch2: v2});
+                    win.dataCycle.push({ cycle: win.cycleIndex+1, time: tt, angle: a, ch1: v1, ch2: v2});
                 }
 
                 // FIN válido: bajada sostenida después de haber alcanzado fin, o salir por arriba

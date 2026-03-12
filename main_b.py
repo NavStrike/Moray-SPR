@@ -37,6 +37,7 @@ print("************************************")
 # En modo production, se fuerza el uso de Wayland para evitar problemas de rendimiento en Linux.
 if production_mode:
     os.environ.setdefault("QT_QPA_PLATFORM", "wayland")
+    # os.environ.setdefault("QT_QPA_GENERIC_PLUGINS", "evdevtouch:/dev/input/event5")
 
 # ===== Serial opcional (ESP32) =====
 try:
@@ -260,6 +261,8 @@ class Backend(QObject):
 
         self.velMin = p1["speeds"]["velMin"]
         self.velMax = p1["speeds"]["velMax"]
+
+        self.current = p1["current"]
 
         self._adq_device = p1["device"]["name"]
         self._unites_device = p1["device"]["unites"]

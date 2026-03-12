@@ -13,7 +13,7 @@
         "velMin": 2.0,
         "velMax": 5.0
     },
-    "current": 550,
+    "current": 300,
     "device": {
         "name": "ldr",
         "unites": "resistance"
