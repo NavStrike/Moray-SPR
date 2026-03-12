@@ -1,4 +1,4 @@
 //Archivos a ignorar en Git
-entornoGUI
+venv_gui
 Doc
 exports
