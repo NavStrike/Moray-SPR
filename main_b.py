@@ -168,7 +168,7 @@ class Backend(QObject):
                 print(f"No se pudo inicializar LED: {e}")
                 self.laser = None
 
-        if _serial_available:
+        if _serial_available and production_mode:
             self._open_serial()
         else:
             print_warning("Serial ESP32 deshabilitado (pyserial no disponible)")

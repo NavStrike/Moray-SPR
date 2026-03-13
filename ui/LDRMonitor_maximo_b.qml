@@ -10,7 +10,7 @@ ApplicationWindow {
     id: win
     visible: true
     visibility: Window.FullScreen
-    //visibility: Window.Maximized
+    // visibility: Window.Maximized
     width: 800
     height: 480
     title: "LDR Monitor"
@@ -626,9 +626,24 @@ ApplicationWindow {
             // Factor de zoom
             property real zoomCurve: 1.0
             property real zoomCycles: 1.0
+
+            property real zoomXCurve: 1.0
+            property real zoomYCurve: 1.0
+            property real zoomXCycles: 1.0
+            property real zoomYCycles: 1.0
+
+            property real panXCurve: 0.0
+            property real panYCurve: 0.0
+            property real panXCycles: 0.0
+            property real panYCycles: 0.0
             
             property real minZoom: 0.5
             property real maxZoom: 100.0
+
+            property real rangeXCurve: 360.0
+            property real rangeYCurve: 1.0
+            property real rangeXCycles: 1.0
+            property real rangeYCycles: 1.0
 
             // ---- Resistencia (kΩ) | Corrriente (mA) vs Ángulo (°) ----
             Canvas {
@@ -670,7 +685,7 @@ ApplicationWindow {
                     // Creación del label eje y
                     if (win.deviceUnites === "resistance"){ctx.fillText("Resistencia (kΩ)", 0, 0);}
                     else if (win.deviceUnites === "current"){ctx.fillText("Corriente (mA)", 0, 0);}
-                    ctx.restore();
+                    ctx.restore();  ctx.save();
 
                     // Si no hay datos
                     if (win.dataCycleFilter.length === 0){
@@ -680,10 +695,10 @@ ApplicationWindow {
                         return;
                     }
 
-                    // Mapeo de coordenadas max / min
+                    // --- MAPEO EJE X CON PANEO Y ZOOM ---
                     let origXmin = win.xMinDeg, origXmax = win.xMaxDeg;
-                    let xCenter = (origXmin + origXmax) / 2;
-                    let xSpanZoomed = (origXmax - origXmin) / grafics.zoomCurve; // Aplicamos el zoom al rango
+                    let xCenter = ((origXmin + origXmax) / 2) + grafics.panXCurve; // ¡PANEO X APLICADO!
+                    let xSpanZoomed = (origXmax - origXmin) / grafics.zoomXCurve;
 
                     const xmin = xCenter - xSpanZoomed / 2;
                     const xmax = xCenter + xSpanZoomed / 2;
@@ -704,10 +719,13 @@ ApplicationWindow {
 
                     const pad = (ymax-ymin)*0.05;
                     let origYMin = ymin-pad, origYMax = ymax+pad;
+
+                    grafics.rangeXCurve = origXmax - origXmin;
+                    grafics.rangeYCurve = origYMax - origYMin;
                     
-                    // Aplicamos el zoom matemático al eje Y
-                    let yCenter = (origYMin + origYMax) / 2;
-                    let ySpanZoomed = (origYMax - origYMin) / grafics.zoomCurve;
+                    // --- MAPEO EJE Y CON PANEO Y ZOOM ---
+                    let yCenter = ((origYMin + origYMax) / 2) + grafics.panYCurve; // ¡PANEO Y APLICADO!
+                    let ySpanZoomed = (origYMax - origYMin) / grafics.zoomYCurve;
                     
                     const yMin = yCenter - ySpanZoomed / 2;
                     const yMax = yCenter + ySpanZoomed / 2;
@@ -755,10 +773,19 @@ ApplicationWindow {
                             ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
                         }
                     }
-                    
+
+                    // Se guarda el canvas para el recorte
+                    ctx.save();
+
+                    // Se definine una área de recorte
+                    ctx.beginPath();
+                    ctx.rect(mLeft, mTop, pw, ph); 
+                    ctx.clip();
                     
                     if (win.viewCh1) {drawPolyline("#22c55e", d=>d.ch1);}
                     if (win.viewCh2) {drawPolyline("#60a5fa", d=>d.ch2);}
+
+                    ctx.restore();
                 }
             }
 
@@ -819,9 +846,10 @@ ApplicationWindow {
                     const padx=(xmax-xmin)*0.08; 
                     let origXmin = xmin-padx, origXmax = xmax+padx;
                     
-                    // Matemática del zoom X
-                    let xCenter = (origXmin + origXmax) / 2;
-                    let xSpanZoomed = (origXmax - origXmin) / grafics.zoomCycles;
+                    // --- MATEMÁTICA DEL ZOOM Y PANEO X ---
+                    let xCenter = ((origXmin + origXmax) / 2) + grafics.panXCycles; // ¡PANEO Y APLICADO!
+                    // CORRECCIÓN: Usabas zoomYCycles aquí, lo he cambiado a zoomXCycles
+                    let xSpanZoomed = (origXmax - origXmin) / grafics.zoomXCycles; 
                     xmin = xCenter - xSpanZoomed / 2;
                     xmax = xCenter + xSpanZoomed / 2;
                     
@@ -844,9 +872,12 @@ ApplicationWindow {
                     const pady=(ymax-ymin)*0.08; 
                     let origYmin = ymin-pady, origYmax = ymax+pady;
 
-                    // Matemática del zoom Y
-                    let yCenter = (origYmin + origYmax) / 2;
-                    let ySpanZoomed = (origYmax - origYmin) / grafics.zoomCycles;
+                    grafics.rangeXCycles = origXmax - origXmin;
+                    grafics.rangeYCycles = origYmax - origYmin;
+
+                    // --- MATEMÁTICA DEL ZOOM Y PANEO Y ---
+                    let yCenter = ((origYmin + origYmax) / 2) + grafics.panYCycles; // ¡PANEO Y APLICADO!
+                    let ySpanZoomed = (origYmax - origYmin) / grafics.zoomYCycles;
                     ymin = yCenter - ySpanZoomed / 2;
                     ymax = yCenter + ySpanZoomed / 2;
 
@@ -887,47 +918,180 @@ ApplicationWindow {
                         }
                     }
 
+                    // Se guarda el canvas para el recorte
+                    ctx.save();
+
+                    // Se definine una área de recorte
+                    ctx.beginPath();
+                    ctx.rect(ml,mt,pw,ph); 
+                    ctx.clip();
+                    
                     if (win.viewCh1) {drawSeries("#22c55e", win.cyclePeakCh1Times, win.cyclePeakCh1Angles);}
                     if (win.viewCh2) {drawSeries("#60a5fa", win.cyclePeakCh2Times, win.cyclePeakCh2Angles);}
+
+                    ctx.restore();
                 }
             }
 
             PinchArea {
+                id: pinchArea
                 anchors.fill: parent
-
-                onPinchStarted: console.log("Pinch iniciado")
-                onPinchFinished: console.log("Pinch finalizado")
                 
-                onPinchUpdated: (pinch) => {
-                    // Actualizar zoom basado en el gesto de pinza
+                // Variables para recordar el estado exacto al iniciar el pellizco
+                property real initialDistX: 1.0
+                property real initialDistY: 1.0
+                property real startZoomX: 1.0
+                property real startZoomY: 1.0
+                property real startPanX: 0.0  // ¡NUEVO! Guardamos el paneo inicial
+                property real startPanY: 0.0  // ¡NUEVO! Guardamos el paneo inicial
+                
+                property bool isPinching: false 
+
+                onPinchStarted: (pinch) => {
+                    isPinching = true; 
+                    
+                    initialDistX = Math.max(1.0, Math.abs(pinch.point2.y - pinch.point1.y));
+                    initialDistY = Math.max(1.0, Math.abs(pinch.point2.x - pinch.point1.x));
+
+                    // Guardamos la "foto" de cómo estaban el zoom y el paneo antes de empezar
                     if (win.viewMode === "curve") {
-                        var newZoom = grafics.zoomCurve * pinch.scale / pinch.previousScale;
-                    } 
-                    else if (win.viewMode === "cycles") {
-                        var newZoom = grafics.zoomCycles * pinch.scale / pinch.previousScale;
-                    }
-                                       
-                    // Limitar entre min y max
-                    if (newZoom > grafics.minZoom && newZoom < grafics.maxZoom) {
-                        if (win.viewMode === "curve") {grafics.zoomCurve = newZoom; plot.requestPaint();} 
-                        else if (win.viewMode === "cycles") {grafics.zoomCycles = newZoom; plotCycles.requestPaint();}
+                        startZoomX = grafics.zoomXCurve;
+                        startZoomY = grafics.zoomYCurve;
+                        startPanX = grafics.panXCurve;
+                        startPanY = grafics.panYCurve;
+                    } else if (win.viewMode === "cycles") {
+                        startZoomX = grafics.zoomXCycles;
+                        startZoomY = grafics.zoomYCycles;
+                        startPanX = grafics.panXCycles;
+                        startPanY = grafics.panYCycles;
                     }
                 }
 
-                // Este MouseArea detecta el doble toque para resetear el zoom
+                onPinchUpdated: (pinch) => {
+                    var currentDistX = Math.max(1.0, Math.abs(pinch.point2.y - pinch.point1.y));
+                    var currentDistY = Math.max(1.0, Math.abs(pinch.point2.x - pinch.point1.x));
+
+                    var scaleX = currentDistX / initialDistX;
+                    var scaleY = currentDistY / initialDistY;
+                    
+                    var plotWidth = width - 110;  
+                    var plotHeight = height - 45; 
+                    
+                    var fx = (pinch.center.y - 10) / plotWidth;
+                    var fy = (pinch.center.x - 100) / plotHeight;
+                    
+                    fx = Math.max(0.0, Math.min(1.0, fx));
+                    fy = Math.max(0.0, Math.min(1.0, fy));
+
+                    if (win.viewMode === "curve") {
+                        // SOLUCIÓN: Usar el zoom inicial * la escala actual de los dedos
+                        var newZoomX = startZoomX * scaleX;
+                        var newZoomY = startZoomY * scaleY;
+
+                        newZoomX = Math.max(grafics.minZoom, Math.min(grafics.maxZoom, newZoomX));
+                        newZoomY = Math.max(grafics.minZoom, Math.min(grafics.maxZoom, newZoomY));
+
+                        var startSpanX = grafics.rangeXCurve / grafics.zoomXCurve;
+                        var newSpanX = grafics.rangeXCurve / newZoomX;
+                            
+                        var startSpanY = grafics.rangeYCurve / grafics.zoomYCurve;
+                        var newSpanY = grafics.rangeYCurve / newZoomY;
+
+                        grafics.panXCurve += (fx - 0.5) * (startSpanX - newSpanX);
+                        grafics.panYCurve += (0.5 - fy) * (startSpanY - newSpanY);
+
+                        grafics.zoomXCurve = newZoomX;
+                        grafics.zoomYCurve = newZoomY;
+                        plot.requestPaint();
+                    } 
+                    else if (win.viewMode === "cycles") {
+                        // SOLUCIÓN: Usar el zoom inicial * la escala actual de los dedos
+                        var newZoomX_cyc = startZoomX * scaleX;
+                        var newZoomY_cyc = startZoomY * scaleY;
+
+                        newZoomX_cyc = Math.max(grafics.minZoom, Math.min(grafics.maxZoom, newZoomX_cyc));
+                        newZoomY_cyc = Math.max(grafics.minZoom, Math.min(grafics.maxZoom, newZoomY_cyc));
+
+                        var startSpanX_cyc = grafics.rangeXCycles / grafics.zoomXCycles;
+                        var newSpanX_cyc = grafics.rangeXCycles / newZoomX_cyc;
+                            
+                        var startSpanY_cyc = grafics.rangeYCycles / grafics.zoomYCycles;
+                        var newSpanY_cyc = grafics.rangeYCycles / newZoomY_cyc;
+
+                        grafics.panXCycles += (fx - 0.5) * (startSpanX_cyc - newSpanX_cyc);
+                        grafics.panYCycles += (0.5 - fy) * (startSpanY_cyc - newSpanY_cyc);
+
+                        grafics.zoomXCycles = newZoomX_cyc;
+                        grafics.zoomYCycles = newZoomY_cyc;
+                        plotCycles.requestPaint();
+                    }
+                }
+
+                onPinchFinished: {
+                    isPinching = false; // Liberamos para que se pueda hacer paneo con 1 dedo
+                }
+
+                // ==========================================
+                // TU MOUSEAREA PARA EL PANEO (Se queda igual)
+                // ==========================================
                 MouseArea {
                     anchors.fill: parent
-                    // Permitimos que los eventos pasen a otros elementos (como el PinchArea)
-                    propagateComposedEvents: true 
+                    propagateComposedEvents: true
                     
-                    onDoubleClicked: {
+                    property real lastX: 0
+                    property real lastY: 0
+
+                    onPressed: (mouse) => {
+                        lastX = mouse.x;
+                        lastY = mouse.y;
+                    }
+
+                    onPositionChanged: (mouse) => {
+                        // Bloqueo de seguridad: no arrastrar si hay 2 dedos
+                        if (pinchArea.isPinching) return;
+
+                        var deltaX = mouse.y - lastY;
+                        var deltaY = mouse.x - lastX;
+
+                        var plotWidth = width - 110; 
+                        var plotHeight = height - 45;
+
                         if (win.viewMode === "curve") {
-                            grafics.zoomCurve = 1.0; // Restaurar variable a 1
-                            plot.requestPaint();     // Redibujar
+                            // ¡NUEVO! Usando rangeXCurve y rangeYCurve
+                            var currentSpanX = grafics.rangeXCurve / grafics.zoomXCurve;
+                            var currentSpanY = grafics.rangeYCurve / grafics.zoomYCurve;
+
+                            grafics.panXCurve -= (deltaX / plotWidth) * currentSpanX;
+                            grafics.panYCurve -= (deltaY / plotHeight) * currentSpanY;
+
+                            plot.requestPaint();
                         } 
                         else if (win.viewMode === "cycles") {
-                            grafics.zoomCycles = 1.0; // Restaurar variable a 1
-                            plotCycles.requestPaint(); // Redibujar
+                            // ¡NUEVO! Usando rangeXCycles y rangeYCycles
+                            var currentSpanX_cyc = grafics.rangeXCycles / grafics.zoomXCycles;
+                            var currentSpanY_cyc = grafics.rangeYCycles / grafics.zoomYCycles;
+
+                            grafics.panXCycles -= (deltaX / plotWidth) * currentSpanX_cyc;
+                            grafics.panYCycles -= (deltaY / plotHeight) * currentSpanY_cyc;
+
+                            plotCycles.requestPaint();
+                        }
+
+                        lastX = mouse.x;
+                        lastY = mouse.y;
+                    }
+
+                    onDoubleClicked: {
+                        console.log("Reset grafics")
+                        if (win.viewMode === "curve") {
+                            grafics.zoomXCurve = 1.0; grafics.zoomYCurve = 1.0;
+                            grafics.panXCurve = 0.0; grafics.panYCurve = 0.0;
+                            plot.requestPaint();
+                        } 
+                        else if (win.viewMode === "cycles") {
+                            grafics.zoomXCycles = 1.0; grafics.zoomYCycles = 1.0;
+                            grafics.panXCycles = 0.0; grafics.panYCycles = 0.0;
+                            plotCycles.requestPaint();
                         }
                     }
                 }

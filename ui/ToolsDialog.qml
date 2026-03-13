@@ -93,7 +93,6 @@ Dialog {
                     onClicked: {
                         win.device = win.device === "ldr" ? "photodetector" : "ldr";
                         win.deviceUnites = win.device === "ldr" ? "resistance" : "current";
-                        win.update();
                         backend.setAdqDevice(win.device);
                     }
                     Layout.preferredHeight: 36

@@ -15,8 +15,8 @@
     },
     "current": 300,
     "device": {
-        "name": "ldr",
-        "unites": "resistance"
+        "name": "photodetector",
+        "unites": "current"
     },
     "saveData": {
         "name": null,
