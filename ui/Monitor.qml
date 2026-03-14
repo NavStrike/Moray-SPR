@@ -334,7 +334,7 @@ Page {
 
                     ColumnLayout {
                         Label { 
-                            text: deviceUnites === "resistance" ? "CH1 Resistencia (kΩ)": "CH1 Corriente (mA)";
+                            text: deviceUnites === "resistance" ? "CH1 (kΩ)": "CH1 (mA)";
                             color: "#22c55e";
                             font.pixelSize: 14;
                             font.bold: true
@@ -349,7 +349,7 @@ Page {
 
                     ColumnLayout {
                         Label {
-                            text: deviceUnites === "resistance" ? "CH2 Resistencia (kΩ)": "CH2 Corriente (mA)";
+                            text: deviceUnites === "resistance" ? "CH2 (kΩ)": "CH2 (mA)";
                             color: "#60a5fa";
                             font.pixelSize: 14;
                             font.bold: true

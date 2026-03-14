@@ -126,8 +126,8 @@ ApplicationWindow {
 
     id: win
     visible: true
-    visibility: Window.Maximized
-    // visibility: Window.FullScreen
+    // visibility: Window.Maximized
+    visibility: Window.FullScreen
     width: 800
     height: 480
     title: "Contenedor principal"
