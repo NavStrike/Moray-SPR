@@ -13,7 +13,4 @@ ApplicationWindow {
     height: 480
     title: "Procesamiento data"
     color: "#0f172a"
-    palette.buttonText: "black"
-
-    
 }

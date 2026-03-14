@@ -15,7 +15,6 @@ ApplicationWindow {
     height: 480
     title: "LDR Monitor"
     color: "#0f172a"
-    palette.buttonText: "black"
     
     // ===== Otras ventanas importadas =====
     AnglesDialog {id: winAngles}
@@ -591,7 +590,10 @@ ApplicationWindow {
                     }
                     Button {
                         text: "Limpiar"
+                        enabled: !win.active
                         onClicked: {
+                            win.measurementTime = 0
+
                             win.data = []
                             win.dataCycle = []
                             win.dataCycleFilter = []

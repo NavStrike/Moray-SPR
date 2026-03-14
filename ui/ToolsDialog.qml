@@ -10,7 +10,7 @@ Dialog {
     property bool activeMayus: false
 
     id: winTools
-    title: "Herramientas adicionales"
+    title: "HERRAMIENTAS ADICIONALES"
     modal: true
     width: parent.width
     height: parent.height
@@ -18,14 +18,6 @@ Dialog {
 
     // Evita visivilidad del encabezado
     header: null
-
-    // Evita el cierre automático al hacer clic fuera del cuadro
-    closePolicy: Popup.NoAutoClose
-
-    // Posición centrada
-    x: (parent.width - width) / 2
-    y: (parent.height - height) / 2
-
     background: Rectangle {
         anchors.fill: parent
         color: "#111827"
@@ -109,7 +101,15 @@ Dialog {
                     text: "Guardar datos adquiridos: "
                     color: "white" 
                     font.bold: true; font.pixelSize: 20
-                } 
+                }
+                TextField {
+                    id: nameFile
+                    text: ""
+                    font.pixelSize: 20
+                    Layout.preferredWidth: 150
+                    Layout.preferredHeight: 36
+                    onActiveFocusChanged: if(activeFocus) activeInput = nameFile
+                }
                 Button {
                     text: "Guardar datos" 
                     enabled: !win.active
@@ -123,28 +123,6 @@ Dialog {
                     font.pixelSize: 14
                 }
 
-            }
-
-            RowLayout{
-                Layout.fillWidth: true
-                spacing: 5
-
-                Label{
-                    text: "Nombre de la carpeta:"
-                    color: "white" 
-                    font.bold: true; font.pixelSize: 20
-                    Layout.preferredHeight: 36
-                }
-
-                TextField {
-                    id: nameFile
-                    text: ""
-                    font.pixelSize: 20
-                    Layout.preferredWidth: 150
-                    Layout.preferredHeight: 36
-                    onActiveFocusChanged: if(activeFocus) activeInput = nameFile
-
-                }
             }
 
             RowLayout{
