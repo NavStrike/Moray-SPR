@@ -133,9 +133,9 @@ ApplicationWindow {
 
     // ===== Adicionales =====
     function scaleTime(time){
-        if(isFinite(time)){
+        if(isFinite(time)){ 
             let sec = Math.floor(time%60), msec = Math.floor((time*60)%60);
-            let min = Math.floor(time/60), hour = Math.floor(min/60);
+            let min = Math.floor((time/60)%60), hour = Math.floor(min/60);
             let _time = [msec, sec, min, hour].map( item =>
                 item < 10 ? `0${item}` : item
             )
@@ -1036,7 +1036,7 @@ ApplicationWindow {
                 // ==========================================
                 MouseArea {
                     anchors.fill: parent
-                    propagateComposedEvents: true
+                    // propagateComposedEvents: true
                     
                     property real lastX: 0
                     property real lastY: 0
@@ -1050,8 +1050,8 @@ ApplicationWindow {
                         // Bloqueo de seguridad: no arrastrar si hay 2 dedos
                         if (pinchArea.isPinching) return;
 
-                        var deltaX = mouse.y - lastY;
-                        var deltaY = mouse.x - lastX;
+                        var deltaX = mouse.x - lastX;
+                        var deltaY = mouse.y - lastY;
 
                         var plotWidth = width - 110; 
                         var plotHeight = height - 45;
@@ -1062,7 +1062,7 @@ ApplicationWindow {
                             var currentSpanY = grafics.rangeYCurve / grafics.zoomYCurve;
 
                             grafics.panXCurve -= (deltaX / plotWidth) * currentSpanX;
-                            grafics.panYCurve -= (deltaY / plotHeight) * currentSpanY;
+                            grafics.panYCurve += (deltaY / plotHeight) * currentSpanY;
 
                             plot.requestPaint();
                         } 
@@ -1072,7 +1072,7 @@ ApplicationWindow {
                             var currentSpanY_cyc = grafics.rangeYCycles / grafics.zoomYCycles;
 
                             grafics.panXCycles -= (deltaX / plotWidth) * currentSpanX_cyc;
-                            grafics.panYCycles -= (deltaY / plotHeight) * currentSpanY_cyc;
+                            grafics.panYCycles += (deltaY / plotHeight) * currentSpanY_cyc;
 
                             plotCycles.requestPaint();
                         }
