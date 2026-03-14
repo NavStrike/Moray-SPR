@@ -134,10 +134,12 @@ ApplicationWindow {
     // ===== Adicionales =====
     function scaleTime(time){
         if(isFinite(time)){
-            let sec = Math.floor(time);
             let msec = Math.floor(time*60);
-            let min = Math.floor(time/60);
-            let hour = Math.floor(time/3600);
+            let sec = Math.floor(msec/60);
+            let min = Math.floor(sec/60);
+            let hour = Math.floor(min/60);
+            
+            msec -= 60*sec; sec -= 60*min; min -= 60*hour
 
             let _time = [msec, sec, min, hour].map( item =>
                 item < 10 ? `0${item}` : item
