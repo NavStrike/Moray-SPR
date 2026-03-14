@@ -133,9 +133,12 @@ ApplicationWindow {
 
     // ===== Adicionales =====
     function scaleTime(time){
-        if(isFinite(time)){ 
-            let sec = Math.floor(time%60), msec = Math.floor((time*60)%60);
-            let min = Math.floor((time/60)%60), hour = Math.floor(min/60);
+        if(isFinite(time)){
+            let sec = Math.floor(time);
+            let msec = Math.floor(time*60);
+            let min = Math.floor(time/60);
+            let hour = Math.floor(time/3600);
+
             let _time = [msec, sec, min, hour].map( item =>
                 item < 10 ? `0${item}` : item
             )
@@ -147,7 +150,7 @@ ApplicationWindow {
 
     function scaleUnitesTime(time){
         if(isFinite(time)){
-            let seg = time%60; let min = time/60; let hor = min/60;
+            let seg = time; let min = time/60; let hor = min/60;
             if(hor>=1){return "(h)"}
             else if(min>=1){return "(m)"}
             else {return "(s)"}
