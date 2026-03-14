@@ -663,6 +663,14 @@ class Backend(QObject):
                         self._last_rel = rel_deg
                         self._last_serial_rx_ms = int(time.monotonic() * 1000)
                         self.serialStatusChanged.emit("ESP32 recibiendo…")
+
+                        if rel_deg > 90:
+                            try:
+                                self.setAbsoluteZero(self.angzeroRel)
+                                print_info(f"Se ha establecido el cero en {self.angzeroRel}")
+                            except Exception as e:
+                                print_error(f"No se ha podido establecer el cero en {self.angzeroRel}: {e}")
+
                         self.angleUpdate.emit(abs_deg, rel_deg)
                     except Exception:
                         pass
