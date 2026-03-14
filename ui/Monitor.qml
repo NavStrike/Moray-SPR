@@ -260,7 +260,7 @@ Page {
                     }
 
                     // Título
-                    Label { text: "Sensor SPR B"; color: "white"; font.bold: true; font.pixelSize: 20 }
+                    Label { text: "Sensor SPR new"; color: "white"; font.bold: true; font.pixelSize: 20 }
 
                     Rectangle { Layout.fillWidth: true; color: "transparent" }
 

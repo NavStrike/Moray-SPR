@@ -163,7 +163,7 @@ ApplicationWindow {
             id: separator_id
             width: 1
             Layout.fillHeight: true
-            color: '#4d4d4d'
+            color: '#1f2937'
         }
 
         Monitor{} // Page 1
