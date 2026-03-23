@@ -405,7 +405,7 @@ Page {
                                 backend.setActive(true)
                                 if (win.debugLogs) console.log("[cycle] START IDA")
                             }
-                            Layout.preferredHeight: 45; Layout.preferredWidth: 120; font.pixelSize: 16
+                            Layout.preferredHeight: 45; Layout.preferredWidth: 100; font.pixelSize: 16
                         }
                         Button {
                             text: "Detener"
@@ -418,6 +418,7 @@ Page {
                         }
                         Button {
                             text: "Limpiar"
+                            enabled: !win.active
                             onClicked: {
                                 win.data = []
                                 win.dataCycle = []
@@ -445,7 +446,7 @@ Page {
                                 backend.changeTimer("reset")
 
                             }
-                            Layout.preferredHeight: 45; Layout.preferredWidth: 120; font.pixelSize: 16
+                            Layout.preferredHeight: 45; Layout.preferredWidth: 100; font.pixelSize: 16
                         }
                     }
                 }
