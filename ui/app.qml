@@ -142,9 +142,32 @@ ApplicationWindow {
             Layout.fillHeight: true
             spacing: 20
 
+            Rectangle {
+                height: 4
+                color: 'transparent'
+            }
+
+            Image {
+                id: logo
+                source: "assets/moray_logo.svg"   // ruta relativa al LDRMonitor.qml
+                Layout.preferredWidth: 70
+                Layout.preferredHeight: 70
+                fillMode: Image.PreserveAspectFit
+                smooth: true
+                mipmap: true
+                antialiasing: true
+                Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
+
+            }
+
+            Rectangle {
+                Layout.fillHeight: true
+                color: 'transparent'
+            }
+
             ButtonPage {
                 id: buttonMonitor
-                icon.source: "assets/monitor_w.png"
+                icon.source: "assets/monitor.svg"
                 onClicked: { viewPage = "monitor" }
 
                 Rectangle {
@@ -156,7 +179,7 @@ ApplicationWindow {
             }
             
             ButtonPage {
-                icon.source: "assets/wrench_w.png"
+                icon.source: "assets/gears.svg"
                 onClicked: { viewPage = "tools" }
                 Rectangle {
                     id: separator2
@@ -167,7 +190,7 @@ ApplicationWindow {
             }
 
             ButtonPage {
-                icon.source: "assets/gears_w.png"
+                icon.source: "assets/flask.svg"
                 onClicked: { viewPage = "process" }
                 Rectangle {
                     id: separator3
@@ -175,6 +198,24 @@ ApplicationWindow {
                     height: parent.height
                     color: viewPage == "process" ? 'white': "transparent"
                 }
+            }
+
+            Rectangle {
+                Layout.fillHeight: true
+                color: 'transparent'
+            }
+
+            ButtonPage {
+                icon.source: "assets/exit.svg"
+                onClicked: {
+                    if (win.active) backend.setActive(false)   // <-- envía "s\n" al ESP32
+                    Qt.quit()
+                }
+            }
+
+            Rectangle {
+                height: 4
+                color: 'transparent'
             }
         }
 

@@ -271,20 +271,6 @@ Page {
                 RowLayout {
                     anchors.fill: parent; anchors.margins: 12; spacing: 16
 
-                    // ⬅️ Logo a la izquierda
-                    Image {
-                        id: logo
-                        source: "assets/moray_logo.png"   // ruta relativa al LDRMonitor.qml
-                        Layout.preferredWidth: 36
-                        Layout.preferredHeight: 36
-                        fillMode: Image.PreserveAspectFit
-                        smooth: true
-                        mipmap: true
-                        antialiasing: true
-                        Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
-
-                    }
-
                     // Título
                     Label { text: "Sensor SPR new"; color: "white"; font.bold: true; font.pixelSize: 20 }
 
@@ -303,18 +289,6 @@ Page {
                         Layout.preferredHeight: 36; Layout.preferredWidth: 120; font.pixelSize: 14
                         ToolTip.visible: hovered
                         ToolTip.text: "Alterna entre Curva (Ángulo vs Resistencia) y Ciclos (Picos vs tiempo)"
-                    }
-
-                    Button {
-                        text: "Salir"
-                        
-                        onClicked: {
-                            if (win.active) backend.setActive(false)   // <-- envía "s\n" al ESP32
-                            Qt.quit()
-                        }
-                        Layout.preferredHeight: 36
-                        Layout.preferredWidth: 80
-                        font.pixelSize: 14
                     }
                 }
             }

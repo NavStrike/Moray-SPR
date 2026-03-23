@@ -9,7 +9,7 @@ Button {
     Layout.alignment: Qt.AlignCenter
     icon.width: 70
     icon.height: 70
-    icon.color: "transparent"
+    icon.color: "white"
     background: Rectangle {
         color: parent.pressed ? '#63ffffff' : "transparent"
     }
