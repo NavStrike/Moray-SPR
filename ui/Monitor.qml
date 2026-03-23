@@ -13,6 +13,34 @@ Page {
     Layout.fillWidth: true
     Layout.fillHeight: true
 
+    // ===== Adicionales =====
+    function scaleTime(time){
+        if(isFinite(time)){
+            let msec = Math.floor(time*60);
+            let sec = Math.floor(msec/60);
+            let min = Math.floor(sec/60);
+            let hour = Math.floor(min/60);
+            
+            msec -= 60*sec; sec -= 60*min; min -= 60*hour
+
+            let _time = [msec, sec, min, hour].map( item =>
+                item < 10 ? `0${item}` : item
+            )
+            if(hour>=1){return `${_time[3]}:${_time[2]}`}
+            else if(min>=1){return `${_time[2]}:${_time[1]}`}
+            else {return `${_time[1]}:${_time[0]}`}
+        } else {return time}
+    }
+
+    function scaleUnitesTime(time){
+        if(isFinite(time)){
+            let seg = time; let min = time/60; let hor = min/60;
+            if(hor>=1){return "(h)"}
+            else if(min>=1){return "(m)"}
+            else {return "(s)"}
+        } else {return "-"}
+    }
+
     // === helpers estadísticos ===
     // Filtro de mediana
     function _median(arr, kernelSize) {
@@ -327,15 +355,16 @@ Page {
                         }
                         Label { text: isFinite(ch2) ? (deviceUnites === "resistance" ? (ch2).toFixed(3) : ch2.toFixed(3)) : "—"; color: "white"; font.pixelSize: 32; font.bold: true }
                     }
+
                     ColumnLayout {
                         Label { text: "Ángulo (°)"; color: "#f472b6"; font.pixelSize: 14; font.bold: true }
                         Label { text: isFinite(win.angleRel) ? win.angleRel.toFixed(2) : "—"; color: "white"; font.pixelSize: 32; font.bold: true }
                     }
 
                     ColumnLayout {
-                        Label { text:"Tiempo (s)";
+                        Label { text:"Tiempo" + scaleUnitesTime(win.measurementTime);
                         color: "#fbbf24"; font.pixelSize: 14; font.bold: true }
-                        Label { text: isFinite(win.measurementTime) ? win.measurementTime.toFixed(1) : "—"; color: "white"; font.pixelSize: 32; font.bold: true }
+                        Label { text: isFinite(win.measurementTime) ? scaleTime(win.measurementTime) : "—"; color: "white"; font.pixelSize: 32; font.bold: true }
                     }
 
                     ColumnLayout {
@@ -878,9 +907,6 @@ Page {
                                 let xmax = grafics.minXCycles + rectxmax*scalex;
                                 let ymin = grafics.minYCycles + (height - rectymax)*scaley;
                                 let ymax = grafics.minYCycles + (height - rectymin)*scaley;
-
-                                console.log(rectxmin, rectymin, rectxmax, rectymax);
-                                console.log(xmin,xmax,ymin,ymax);
 
                                 grafics.minXCycles = xmin; grafics.minYCycles = ymin;
                                 grafics.maxXCycles = xmax; grafics.maxYCycles = ymax;
