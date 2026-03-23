@@ -16,7 +16,7 @@
   x cambiar gráfica
 * Formatear a mseg, seg, min y horas el tiempo mostrado barra general.
 * Permitir crear marcas en la gráfica durante la ejecución.
-* Marcar pestaña activa con un rectangulo al cotado izquierdo.
+* Marcar pestaña activa con un rectangulo al costado izquierdo.
 * Botón para actualizar la aplicación (update).
 * Mover el botón de borrar 1 ciclo.
 * Creación de margenes visualización de la gráfica

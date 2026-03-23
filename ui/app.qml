@@ -143,20 +143,39 @@ ApplicationWindow {
             spacing: 20
 
             ButtonPage {
+                id: buttonMonitor
                 icon.source: "assets/monitor_w.png"
                 onClicked: { viewPage = "monitor" }
-            }
 
+                Rectangle {
+                    id: separator1
+                    width: 5
+                    height: parent.height
+                    color: viewPage == "monitor" ? 'white': "transparent"
+                }
+            }
+            
             ButtonPage {
                 icon.source: "assets/wrench_w.png"
                 onClicked: { viewPage = "tools" }
+                Rectangle {
+                    id: separator2
+                    width: 5
+                    height: parent.height
+                    color: viewPage == "tools" ? 'white': "transparent"
+                }
             }
 
             ButtonPage {
                 icon.source: "assets/gears_w.png"
                 onClicked: { viewPage = "process" }
+                Rectangle {
+                    id: separator3
+                    width: 5
+                    height: parent.height
+                    color: viewPage == "process" ? 'white': "transparent"
+                }
             }
-
         }
 
         Rectangle {
