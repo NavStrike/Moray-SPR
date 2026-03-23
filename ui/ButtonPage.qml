@@ -12,6 +12,5 @@ Button {
     icon.color: "transparent"
     background: Rectangle {
         color: parent.pressed ? '#63ffffff' : "transparent"
-
     }
 }

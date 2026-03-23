@@ -12,8 +12,6 @@ Page {
     title: "Monitor"
     Layout.fillWidth: true
     Layout.fillHeight: true
-    
-    palette.buttonText: "black"
 
     // === helpers estadísticos ===
     // Filtro de mediana
@@ -217,7 +215,7 @@ Page {
         updatePeakLabelsFromDataFilter();
 
         // 6) repintar
-        plot.requestPaint();
+        plotCurve.requestPaint();
         plotCycles.requestPaint();
 
         // 7) limpiar estado de ciclo
@@ -271,39 +269,12 @@ Page {
                         text: win.viewMode === "curve" ? "Ver Ciclos" : "Ver Curva"
                         onClicked: {
                             win.viewMode = (win.viewMode === "curve") ? "cycles" : "curve"
-                            plot.requestPaint()
+                            plotCurve.requestPaint()
                             plotCycles.requestPaint()
                         }
                         Layout.preferredHeight: 36; Layout.preferredWidth: 120; font.pixelSize: 14
                         ToolTip.visible: hovered
                         ToolTip.text: "Alterna entre Curva (Ángulo vs Resistencia) y Ciclos (Picos vs tiempo)"
-                    }
-
-                    Button {
-                        text: "Borrar ciclo"
-                        onClicked: {
-                            if (win.cycleIndex > 0){
-                                win.data = win.data.filter(dat => dat.cycle !== win.cycleIndex-cyclesDelete.length-1);
-                                win.dataCycleFilter = win.data.filter(dat => dat.cycle == win.cycleIndex-cyclesDelete.length-2);
-
-                                win.cyclePeakCh1Angles.pop()
-                                win.cyclePeakCh1Times.pop()
-                                win.cyclePeakCh2Angles.pop()
-                                win.cyclePeakCh2Times.pop()
-
-                                win.cyclePeakCh1CentroidAngles.pop()
-                                win.cyclePeakCh1CentroidTimes.pop()
-                                win.cyclePeakCh2CentroidAngles.pop()
-                                win.cyclePeakCh2CentroidTimes.pop()
-
-                                plot.requestPaint(); plotCycles.requestPaint();
-
-                                cyclesDelete.push(win.cycleIndex)
-                            }
-                        }
-                        Layout.preferredHeight: 36; Layout.preferredWidth: 120; font.pixelSize: 14
-                        ToolTip.visible: hovered
-                        ToolTip.text: "Elimina el último ciclo graficado"
                     }
 
                     Button {
@@ -378,12 +349,12 @@ Page {
                     ColumnLayout {
                         RowLayout {
                             Label { text:"Ch1"; color: '#ffffff'; font.pixelSize: 14; font.bold: true }
-                            Switch { checked: win.viewCh1; onToggled: {win.viewCh1 = ! win.viewCh1; plot.requestPaint(); plotCycles.requestPaint()} }
+                            Switch { checked: win.viewCh1; onToggled: {win.viewCh1 = ! win.viewCh1; plotCurve.requestPaint(); plotCycles.requestPaint()} }
                         }
 
                         RowLayout {
                             Label { text:"Ch2"; color: '#ffffff'; font.pixelSize: 14; font.bold: true }
-                            Switch { checked: win.viewCh2; onToggled: {win.viewCh2 = ! win.viewCh2; plot.requestPaint(); plotCycles.requestPaint()} }
+                            Switch { checked: win.viewCh2; onToggled: {win.viewCh2 = ! win.viewCh2; plotCurve.requestPaint(); plotCycles.requestPaint()} }
                         }
                     }
 
@@ -440,7 +411,7 @@ Page {
                                 win.sawStartGate = false; win.sawEndGate = false
                                 win.minA = 9999.0; win.maxA = -9999.0
 
-                                plot.requestPaint(); plotCycles.requestPaint()
+                                plotCurve.requestPaint(); plotCycles.requestPaint()
 
                                 backend.changeTimer("reset")
 
@@ -451,243 +422,622 @@ Page {
                 }
             }
 
-            // ===== Gráficas =====
-            Rectangle {
+            // ===== Gráficas y sus controles =====
+            RowLayout{
+                id: contenGrafics
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                radius: 12
-                color: "#111827"
-                border.color: "#1f2937"; border.width: 1
+                spacing: 20
 
-                // ---- Resistencia (kΩ) | Corrriente (mA) vs Ángulo (°) ----
-                Canvas {
-                    id: plot
-                    visible: win.viewMode === "curve"
-                    anchors.fill: parent
-                    anchors.margins: 20
-                    antialiasing: true
-                    property real xTickStep: 1.0
+                // ===== Gráficas =====
+                Rectangle {
+                    id:grafics
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    radius: 12
+                    color: '#111827'
+                    border.color: "#1f2937"; border.width: 1
 
-                    onPaint: {
-                        const ctx = getContext("2d");
-                        const W=width, H=height;
+                    // Variables
+                    property string modeGrafic: "home";
 
-                        // Limpieza de la pantalla
-                        ctx.clearRect(0,0,W,H);
-                        //Creación de un rectangulo
-                        ctx.fillStyle="#111827"; ctx.fillRect(0,0,W,H);
+                    // Historial
+                    property var historyTransformCurve: []
+                    property var historyTransformCycles: []
 
-                        const mLeft=100, mRight=10, mTop=10, mBottom=35;
-                        const pw = W-mLeft-mRight, ph = H-mTop-mBottom;
-                        
-                        if (pw<=0 || ph<=0) {
-                            if (win.debugLogs) console.log(`El área útil es negativa: pw=${pw} ph=${ph}`);
-                            return;
+                    // Medidas de graficas:
+                    property real mLeft: 80; property real mRight: 10
+                    property real mTop: 10; property real mBottom: 40
+                    property real mBorder: 20
+                    
+                    // Valores actuales limites:
+                    property real minXCurve: NaN
+                    property real minYCurve: NaN
+                    property real maxXCurve: NaN
+                    property real maxYCurve: NaN
+
+                    property real minXCycles: NaN
+                    property real minYCycles: NaN
+                    property real maxXCycles: NaN
+                    property real maxYCycles: NaN
+
+                    function resetGrafics(){
+                        if(win.viewMode == "curve"){
+                            grafics.historyTransformCurve = []; plotCurve.requestPaint();
+                        } else if(win.viewMode == "cycles"){
+                            grafics.historyTransformCycles = []; plotCycles.requestPaint();
                         }
-                        
-                        // Creación del marco
-                        ctx.strokeStyle="#1f2937"; ctx.strokeRect(mLeft,mTop,pw,ph);
-                        
-                        // Creación del label eje x
-                        ctx.fillStyle="#9ca3af"; ctx.font="12px sans-serif"; ctx.textAlign="center";
-                        ctx.fillText("Ángulo (°)", mLeft+pw/2, H);
+                    }
 
-                        ctx.save(); ctx.translate(15, mTop+ph/2+30); ctx.rotate(-Math.PI/2);
+                    // ---- Resistencia (kΩ) | Corrriente (mA) vs Ángulo (°) ----
+                    Canvas {
+                        id: plotCurve
+                        visible: win.viewMode === "curve"
+                        anchors.fill: parent
+                        anchors.margins: grafics.mBorder
+                        antialiasing: true
 
-                        // Creación del label eje y
-                        if (win.deviceUnites === "resistance"){ctx.fillText("Resistencia (kΩ)", 0, 0);}
-                        else if (win.deviceUnites === "current"){ctx.fillText("Corriente (mA)", 0, 0);}
-                        ctx.restore();
+                        onPaint: {
+                            // Parámetros principales
+                            const ctx = getContext("2d");
+                            const _W=width, _H=height;
+                            const _X=x, _Y=y;
 
-                        // Si no hay datos
-                        if (win.dataCycleFilter.length === 0){
+                            // Limpieza de la pantalla
+                            ctx.clearRect(0,0,_W,_H);
+
+                            //Creación de un rectangulo
+                            ctx.fillStyle="#111827"; ctx.fillRect(0,0,_W,_H);
+
+                            // Definición margenes y zona de dibujo
+                            const mLeft=grafics.mLeft, mRight=grafics.mRight, mTop=grafics.mTop, mBottom=grafics.mBottom;
+                            const ZoneW = _W-mLeft-mRight, ZoneH = _H-mTop-mBottom;
+                            
+                            if (ZoneW<=0 || ZoneH<=0) {
+                                if (win.debugLogs) console.log(`El área útil no es existe: horizontal=${ZoneW} vertical=${ZoneH}`);
+                                return;
+                            }
+                            
+                            // Creación del marco
+                            ctx.strokeStyle="#1f2937"; ctx.strokeRect(mLeft,mTop,ZoneW,ZoneH);
+                            
+                            // Creación del label eje x
                             ctx.fillStyle="#9ca3af";
-                            ctx.textAlign="left";
-                            ctx.fillText("Sin datos agregados aún…", mLeft+10, mTop+20);
-                            return;
-                        }
+                            ctx.font="12px sans-serif"; ctx.textAlign="center";
+                            ctx.fillText("Ángulo (°)", mLeft+ZoneW/2, mTop + ZoneH + 35);
+                            ctx.save();
 
-                        // Mapeo de coordenadas max / min
-                        const xmin = win.xMinDeg, xmax = win.xMaxDeg;
-                        const xspan = Math.max(1e-9,xmax-xmin);
-                        const xMap = (vx)=> mLeft + ((vx-xmin)/xspan)*pw;
+                            ctx.translate(15, mTop+ZoneH/2); ctx.rotate(-Math.PI/2);
 
-                        // eje Y auto
-                        let ymin = +Infinity, ymax = -Infinity;
+                            // Creación del label eje y
+                            if (win.deviceUnites === "resistance"){ctx.fillText("Resistencia (kΩ)", 0, 0);}
+                            else if (win.deviceUnites === "current"){ctx.fillText("Corriente (mA)", 0, 0);}
 
-                        for (let i=0; i<win.dataCycleFilter.length; i++){
-                            const d=win.dataCycleFilter[i];
-                            if (isFinite(d.ch1) && win.viewCh1){ymin=Math.min(ymin,d.ch1); ymax=Math.max(ymax,d.ch1);}
-                            if (isFinite(d.ch2) && win.viewCh2){ymin=Math.min(ymin,d.ch2); ymax=Math.max(ymax,d.ch2);}
-                        }
+                            ctx.restore();
 
-                        if (!(ymin<Infinity && ymax>-Infinity)){ymin = 0; ymax = 1;}
-                        if (Math.abs(ymax-ymin)<1e-9) {ymax = ymin+0.5; ymin -= 0.5;}
+                            // Si no hay datos
+                            if (win.dataCycleFilter.length === 0){
+                                ctx.fillStyle="#9ca3af";
+                                ctx.textAlign="left";
+                                ctx.fillText("Sin datos agregados aún…", mLeft+10, mTop+20);
+                                return;
+                            }
 
-                        const pad = (ymax-ymin)*0.05; const yMin=ymin-pad, yMax = ymax+pad;
-                        const yMap = (vy)=> mTop + ph*(1-(vy-yMin)/(yMax-yMin));
+                            // Determinación de minimos y máximos {x e y}
+                            let xminReal = +Infinity, xmaxReal = -Infinity;
+                            let yminReal = +Infinity, ymaxReal = -Infinity;
 
-                        // grilla H
-                        ctx.strokeStyle="#253041"; ctx.lineWidth=1; ctx.beginPath();
-                        for (let gy=0; gy<=6; gy++){ const y=mTop+ph*(gy/6); ctx.moveTo(mLeft,y); ctx.lineTo(mLeft+pw,y); }
-                        ctx.stroke();
+                            for (let i=0; i<win.dataCycleFilter.length; i++){
+                                const d=win.dataCycleFilter[i];
+                                xminReal=Math.min(xminReal,d.angle); xmaxReal=Math.max(xmaxReal,d.angle);
+                                if (isFinite(d.ch1) && win.viewCh1){yminReal=Math.min(yminReal,d.ch1); ymaxReal=Math.max(ymaxReal,d.ch1);}
+                                if (isFinite(d.ch2) && win.viewCh2){yminReal=Math.min(yminReal,d.ch2); ymaxReal=Math.max(ymaxReal,d.ch2);}
+                            }
 
-                        // ticks X exactos
-                        const step=Math.max(0.01, plot.xTickStep);
-                        const firstTick=Math.ceil(xmin/step)*step;
-                        const lastTick=Math.floor(xmax/step)*step;
-                        ctx.beginPath();
-                        for (let v=firstTick; v<=lastTick+1e-9; v+=step){
-                            const x=xMap(v); ctx.moveTo(x,mTop); ctx.lineTo(x,mTop+ph);
-                        }
-                        ctx.strokeStyle="#253041"; ctx.stroke();
+                            if (!(xminReal<Infinity && xmaxReal>-Infinity)){xminReal = 0; xmaxReal = 1;}
+                            if (Math.abs(xmaxReal-xminReal)<1e-9) {xmaxReal = xminReal+0.5; xminReal -= 0.5;}
 
-                        // etiquetas
-                        ctx.fillStyle="#9ca3af"; ctx.font="12px sans-serif"; ctx.textAlign="center";
-                        for (let v=firstTick; v<=lastTick+1e-9; v+=step){
-                            const x=xMap(v); ctx.fillText(v.toFixed(step<1?2:0), x, mTop+ph+18);
-                        }
-                        ctx.textAlign="right";
-                        for (let gy=0; gy<=6; gy++){
-                            const vy=yMin+(yMax-yMin)*(gy/6); const y=mTop+ph*(1-gy/6);
-                            ctx.fillText(vy.toFixed(3), mLeft-6, y+4);
-                        }
+                            if (!(yminReal<Infinity && ymaxReal>-Infinity)){yminReal = 0; ymaxReal = 1;}
+                            if (Math.abs(ymaxReal-yminReal)<1e-9) {ymaxReal = yminReal+0.5; yminReal -= 0.5;}
 
-                        function drawPolyline(color, acc){
-                            ctx.strokeStyle=color; ctx.lineWidth=2; ctx.beginPath();
-                            let started=false;
-                            for (let i=0;i<win.dataCycleFilter.length;i++){
-                                const d=win.dataCycleFilter[i]; const v=acc(d); if (!isFinite(v)) continue;
-                                const x=xMap(d.angle), y=yMap(v);
-                                if(!started){ctx.moveTo(x,y); started=true;} else ctx.lineTo(x,y);
+                            // Creación de un padx
+                            const padx = (xmaxReal-xminReal)*0.02;
+                            xminReal -= padx; xmaxReal += padx;
+
+                            // Creación de un pady
+                            const pady = (ymaxReal-yminReal)*0.05;
+                            yminReal -= pady; ymaxReal += pady;
+
+                            // Si no ha ocurrido una transformación
+                            if (grafics.historyTransformCurve.length == 0){
+                                grafics.minXCurve = xminReal; grafics.minYCurve = yminReal;
+                                grafics.maxXCurve = xmaxReal; grafics.maxYCurve = ymaxReal;
+                            }
+                            
+                            let xmin = grafics.minXCurve, ymin = grafics.minYCurve;
+                            let xmax = grafics.maxXCurve, ymax = grafics.maxYCurve;
+
+                            // Creación funciones de mapeo
+                            const xspan = Math.max(1e-9,xmax-xmin);
+                            const xMap = (vx)=> mLeft + ((vx-xmin)/xspan)*ZoneW;
+
+                            const yspan = Math.max(1e-9,ymax-ymin);
+                            const yMap = (vy)=> mTop + (1-(vy-ymin)/yspan)*ZoneH;
+
+                            // grilla
+                            ctx.strokeStyle="#253041";
+                            ctx.lineWidth=1;
+
+                            // En vertical
+                            ctx.beginPath();
+                            for (let gy=0; gy<=10; gy++){
+                                const y=mTop+ZoneH*(gy/10);
+                                ctx.moveTo(mLeft,y);
+                                ctx.lineTo(mLeft+ZoneW,y);
                             }
                             ctx.stroke();
-                            ctx.fillStyle=color; const r=2.0;
-                            for (let i=0;i<win.dataCycleFilter.length;i++){
-                                const d=win.dataCycleFilter[i]; const v=acc(d); if (!isFinite(v)) continue;
-                                const x=xMap(d.angle), y=yMap(v);
-                                ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+
+                            // En horizontal
+                            const step=1;
+                            const firstTick=Math.ceil(xmin/step)*step;
+                            const lastTick=Math.floor(xmax/step)*step;
+                            ctx.beginPath();
+                            for (let v=firstTick; v<=lastTick; v+=step){
+                                const x=xMap(v);
+                                ctx.moveTo(x,mTop);
+                                ctx.lineTo(x,mTop+ZoneH);
+                            }
+                            ctx.strokeStyle="#253041";
+                            ctx.stroke();
+
+                            // etiquetas
+                            ctx.fillStyle="#9ca3af"; ctx.font="12px sans-serif"; ctx.textAlign="center";
+                            for (let v=firstTick; v<=lastTick+1e-9; v+=step){
+                                const x=xMap(v); ctx.fillText(v.toFixed(step<1?2:0), x, mTop+ZoneH+18);
+                            }
+                            ctx.textAlign="right";
+                            for (let gy=0; gy<=10; gy++){
+                                const vy=ymin+(ymax-ymin)*(gy/10); const y=mTop+ZoneH*(1-gy/10);
+                                ctx.fillText(vy.toFixed(3), mLeft-6, y+4);
+                            }
+
+                            function drawPolyline(color, acc){
+                                ctx.strokeStyle=color; ctx.lineWidth=2; ctx.beginPath();
+                                let started=false;
+                                for (let i=0;i<win.dataCycleFilter.length;i++){
+                                    const d=win.dataCycleFilter[i]; const v=acc(d); if (!isFinite(v)) continue;
+                                    const x=xMap(d.angle), y=yMap(v);
+                                    if(!started){ctx.moveTo(x,y); started=true;} else ctx.lineTo(x,y);
+                                }
+                                ctx.stroke();
+                                ctx.fillStyle=color; const r=2.0;
+                                for (let i=0;i<win.dataCycleFilter.length;i++){
+                                    const d=win.dataCycleFilter[i]; const v=acc(d); if (!isFinite(v)) continue;
+                                    const x=xMap(d.angle), y=yMap(v);
+                                    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+                                }
+                            }
+                            
+                            if (win.viewCh1) {drawPolyline("#22c55e", d=>d.ch1);}
+                            if (win.viewCh2) {drawPolyline("#60a5fa", d=>d.ch2);}
+                        }
+                    }
+
+                    // ---- Ángulo del máximo vs Nº de ciclo (sensorgrama) ----
+                    Canvas {
+                        id: plotCycles
+                        visible: win.viewMode === "cycles"
+                        anchors.fill: parent
+                        anchors.margins: grafics.mBorder
+                        antialiasing: true
+
+                        onPaint: {
+                            // Parámetros principales
+                            const ctx = getContext("2d");
+                            const _W=width, _H=height;
+                            const _X=x, _Y=y;
+
+                            // Limpieza de la pantalla
+                            ctx.clearRect(0,0,_W,_H);
+
+                            //Creación de un rectangulo
+                            ctx.fillStyle="#111827"; ctx.fillRect(0,0,_W,_H);
+
+                            // Definición margenes y zona de dibujo
+                            const mLeft=grafics.mLeft, mRight=grafics.mRight, mTop=grafics.mTop, mBottom=grafics.mBottom;
+                            const ZoneW = _W-mLeft-mRight, ZoneH = _H-mTop-mBottom;
+
+                            if (ZoneW<=0 || ZoneH<=0) {
+                                if (win.debugLogs) console.log(`El área útil no es existe: horizontal=${ZoneW} vertical=${ZoneH}`);
+                                return;
+                            }
+
+                            // Creación del marco
+                            ctx.strokeStyle="#1f2937"; ctx.strokeRect(mLeft,mTop,ZoneW,ZoneH);
+                            
+                            // Creación del label eje x
+                            ctx.fillStyle="#9ca3af";
+                            ctx.font="12px sans-serif"; ctx.textAlign="center";
+                            ctx.fillText("Tiempo (s)", mLeft+ZoneW/2, mTop + ZoneH + 35);
+                            ctx.save();
+
+                            ctx.translate(15, mTop+ZoneH/2); ctx.rotate(-Math.PI/2);
+
+                            // Creación del label eje y
+                            ctx.fillText("Ángulo del máximo (°)", 0, 0); ctx.restore();
+
+                            // Calculo del numero de datos
+                            const n1=win.cyclePeakCh1Times.length, n2=win.cyclePeakCh1Times.length;
+                            const n3=win.cyclePeakCh1Angles.length, n4=win.cyclePeakCh2Angles.length;
+                            const N=Math.max(n1,n2,n3,n4);
+
+                            // Si no hay datos
+                            if (N === 0){
+                                ctx.fillStyle="#9ca3af";
+                                ctx.textAlign="left";
+                                ctx.fillText("Sin ciclos completados aún…", mLeft+10, mTop+20);
+                                return;
+                            }
+
+                            // Determinación de minimos y máximos {x e y}
+                            let xminReal = +Infinity, xmaxReal = -Infinity;
+                            let yminReal = +Infinity, ymaxReal = -Infinity;
+
+                            const nMin = Math.max(n1,n2,n3,n4);
+
+                            for (let i=0; i<nMin; i++){
+                                const t1=win.cyclePeakCh1Times[i];
+                                const t2=win.cyclePeakCh2Times[i];
+                                const a1=win.cyclePeakCh1Angles[i];
+                                const a2=win.cyclePeakCh2Angles[i];
+                                if (isFinite(t1) && win.viewCh1){xminReal=Math.min(xminReal,t1); xmaxReal=Math.max(xmaxReal,t1);}
+                                if (isFinite(t2) && win.viewCh2){xminReal=Math.min(xminReal,t2); xmaxReal=Math.max(xmaxReal,t2);}
+                                if (isFinite(a1) && win.viewCh1){yminReal=Math.min(yminReal,a1); ymaxReal=Math.max(ymaxReal,a1);}
+                                if (isFinite(a2) && win.viewCh2){yminReal=Math.min(yminReal,a2); ymaxReal=Math.max(ymaxReal,a2);}
+                            }
+
+                            if (!(xminReal<Infinity && xmaxReal>-Infinity)){xminReal = 0; xmaxReal = 1;}
+                            if (Math.abs(xmaxReal-xminReal)<1e-9) {xmaxReal = xminReal+0.5; xminReal -= 0.5;}
+
+                            if (!(yminReal<Infinity && ymaxReal>-Infinity)){yminReal=win.xMinDeg; ymaxReal=win.xMaxDeg;}
+                            if (Math.abs(ymaxReal-yminReal)<1e-9) {ymaxReal = yminReal+0.5; yminReal -= 0.5;}
+
+                            // Creación de un padx
+                            const padx = (xmaxReal-xminReal)*0.05;
+                            xminReal -= padx; xmaxReal += padx;
+
+                            // Creación de un pady
+                            const pady = (ymaxReal-yminReal)*0.05;
+                            yminReal -= pady; ymaxReal += pady;
+
+                            // Si no ha ocurrido una transformación
+                            if (grafics.historyTransformCycles.length == 0){
+                                grafics.minXCycles= xminReal; grafics.minYCycles = yminReal;
+                                grafics.maxXCycles = xmaxReal; grafics.maxYCycles = ymaxReal;
+                            }
+                            
+                            let xmin = grafics.minXCycles, ymin = grafics.minYCycles;
+                            let xmax = grafics.maxXCycles, ymax = grafics.maxYCycles;
+
+                            // Creación funciones de mapeo
+                            const xspan = Math.max(1e-9,xmax-xmin);
+                            const xMap = (vx)=> mLeft + ((vx-xmin)/xspan)*ZoneW;
+
+                            const yspan = Math.max(1e-9,ymax-ymin);
+                            const yMap = (vy)=> mTop + (1-(vy-ymin)/yspan)*ZoneH;
+
+                            // grilla
+                            ctx.strokeStyle="#253041";
+                            ctx.lineWidth=1;
+
+                            // En vertical
+                            ctx.beginPath();
+                            for (let gy=0; gy<=10; gy++){
+                                const y=mTop+ZoneH*(gy/10);
+                                ctx.moveTo(mLeft,y);
+                                ctx.lineTo(mLeft+ZoneW,y);
+                            }
+                            ctx.stroke();
+
+                            // En horizontal
+                            const maxTicks=10;
+                            const step=Math.max(0.1, Math.floor(xmax/maxTicks));
+                            const firstTick=Math.ceil(xmin/step)*step;
+                            const lastTick=Math.floor(xmax/step)*step;
+                            ctx.beginPath();
+                            for (let v=firstTick; v<=lastTick; v+=step){
+                                const x=xMap(v);
+                                ctx.moveTo(x,mTop);
+                                ctx.lineTo(x,mTop+ZoneH);
+                            }
+                            ctx.strokeStyle="#253041";
+                            ctx.stroke();
+
+                            // etiquetas
+                            ctx.fillStyle="#9ca3af"; ctx.font="12px sans-serif"; ctx.textAlign="center";
+                            for (let v=firstTick; v<=lastTick+1e-9; v+=step){
+                                const x=xMap(v); ctx.fillText(v.toFixed(step<1?2:0), x, mTop+ZoneH+18);
+                            }
+                            ctx.textAlign="right";
+                            for (let gy=0; gy<=10; gy++){
+                                const vy=ymin+(ymax-ymin)*(gy/10); const y=mTop+ZoneH*(1-gy/10);
+                                ctx.fillText(vy.toFixed(3), mLeft-6, y+4);
+                            }
+
+                            function drawSeries(color, arr1, arr2){
+                                ctx.strokeStyle=color; ctx.lineWidth=2; ctx.beginPath();
+                                let started=false;
+                                for (let i=1;i<=arr1.length;i++){
+                                    const u=arr1[i-1], v=arr2[i-1];
+                                    if (!isFinite(v)) continue;
+                                    const x=xMap(u), y=yMap(v);
+                                    if(!started){ctx.moveTo(x,y); started=true;} else ctx.lineTo(x,y);
+                                }
+                                ctx.stroke(); ctx.fillStyle=color;
+                                for (let i=1;i<=arr1.length;i++){
+                                    const u=arr1[i-1], v=arr2[i-1];
+                                    if (!isFinite(v)) continue;
+                                    const x=xMap(u), y=yMap(v);
+                                    ctx.beginPath(); ctx.arc(x,y,3,0,Math.PI*2); ctx.fill();
+                                }
+                            }
+
+                            if (win.viewCh1) {
+                                drawSeries("#22c55e", win.cyclePeakCh1Times, win.cyclePeakCh1Angles);
+                                // drawSeries('#ec706c', win.cyclePeakCh1CentroidTimes, win.cyclePeakCh1CentroidAngles);
+                            }
+                            if (win.viewCh2) {
+                                drawSeries("#60a5fa", win.cyclePeakCh2Times, win.cyclePeakCh2Angles);
+                                // drawSeries('#dac511', win.cyclePeakCh2CentroidTimes, win.cyclePeakCh2CentroidAngles);
                             }
                         }
+                    }
+
+                    // ---- Área de selección ----
+                    MouseArea {
+                        id: mouseArea
+                        anchors.fill: parent
+                        anchors.leftMargin: grafics.mLeft + grafics.mBorder
+                        anchors.topMargin: grafics.mRight + grafics.mBorder
+                        anchors.rightMargin: grafics.mTop + grafics.mBorder
+                        anchors.bottomMargin: grafics.mBottom + grafics.mBorder
+
+                        property bool viewSelection: false
+                        property point lastMousePos: Qt.point(0, 0)
+                        property point selectionStart: Qt.point(0, 0)
+                        property point selectionEnd: Qt.point(0, 0)
+
+                        function moveGraf(moveX, moveY){
+                            if(win.viewMode == "curve"){
+                                let scalex = (grafics.maxXCurve-grafics.minXCurve)/width;
+                                let scaley = (grafics.maxYCurve-grafics.minYCurve)/height;
+
+                                let dx = moveX*scalex; let dy = moveY*scaley;
+
+                                grafics.minXCurve -= dx; grafics.minYCurve += dy;
+                                grafics.maxXCurve -= dx; grafics.maxYCurve += dy;
+                                
+                                grafics.historyTransformCurve.push([grafics.minXCurve, grafics.maxXCurve, grafics.minYCurve, grafics.maxYCurve]);
+                                plotCurve.requestPaint();
+
+                            } else if(win.viewMode == "cycles"){
+                                let scalex = (grafics.maxXCycles-grafics.minXCycles)/width;
+                                let scaley = (grafics.maxYCycles-grafics.minYCycles)/height;
+
+                                let dx = moveX*scalex; let dy = moveY*scaley;
+
+                                grafics.minXCycles -= dx; grafics.minYCycles += dy;
+                                grafics.maxXCycles -= dx; grafics.maxYCycles += dy;
+
+                                grafics.historyTransformCycles.push([grafics.minXCycles, grafics.minYCycles, grafics.maxXCycles, grafics.maxYCycles]);
+                                plotCycles.requestPaint();
+                            }
+                        }
+
+                        function zoomInGraf(rectxmin, rectymin, rectxmax, rectymax){
+                            if(win.viewMode == "curve"){
+                                let scalex = (grafics.maxXCurve-grafics.minXCurve)/width;
+                                let scaley = (grafics.maxYCurve-grafics.minYCurve)/height;
+
+                                let xmin = grafics.minXCurve + rectxmin*scalex;
+                                let xmax = grafics.minXCurve + rectxmax*scalex;
+                                let ymin = grafics.minYCurve + (height - rectymax)*scaley;
+                                let ymax = grafics.minYCurve + (height - rectymin)*scaley;
+
+                                grafics.minXCurve = xmin; grafics.maxXCurve = xmax;
+                                grafics.minYCurve = ymin; grafics.maxYCurve = ymax;
+                                grafics.historyTransformCurve.push([grafics.minXCurve, grafics.maxXCurve, grafics.minYCurve, grafics.maxYCurve]);
+                                plotCurve.requestPaint();
+
+                            } else if(win.viewMode == "cycles"){
+                                let scalex = (grafics.maxXCycles-grafics.minXCycles)/width;
+                                let scaley = (grafics.maxYCycles-grafics.minYCycles)/height;
+
+                                let xmin = grafics.minXCycles + rectxmin*scalex;
+                                let xmax = grafics.minXCycles + rectxmax*scalex;
+                                let ymin = grafics.minYCycles + (height - rectymax)*scaley;
+                                let ymax = grafics.minYCycles + (height - rectymin)*scaley;
+
+                                console.log(rectxmin, rectymin, rectxmax, rectymax);
+                                console.log(xmin,xmax,ymin,ymax);
+
+                                grafics.minXCycles = xmin; grafics.minYCycles = ymin;
+                                grafics.maxXCycles = xmax; grafics.maxYCycles = ymax;
+                                grafics.historyTransformCycles.push([grafics.minXCycles, grafics.minYCycles, grafics.maxXCycles, grafics.maxYCycles]);
+                                plotCycles.requestPaint();
+                            }
+                        }
+
+                        function zoomOutGraf(){
+                            if(win.viewMode == "curve"){
+                                let xmin = grafics.minXCurve*0.9;
+                                let xmax = grafics.maxXCurve*1.1;
+                                let ymin = grafics.minYCurve*0.9;
+                                let ymax = grafics.maxYCurve*1.1;
+
+                                grafics.minXCurve = xmin; grafics.maxXCurve = xmax;
+                                grafics.minYCurve = ymin; grafics.maxYCurve = ymax;
+                                grafics.historyTransformCurve.push([grafics.minXCurve, grafics.maxXCurve, grafics.minYCurve, grafics.maxYCurve]);
+                                plotCurve.requestPaint();
+
+                            } else if(win.viewMode == "cycles"){
+                                let xmin = grafics.minXCycles*0.9;
+                                let xmax = grafics.maxXCycles*1.1;
+                                let ymin = grafics.minYCycles*0.9;
+                                let ymax = grafics.maxYCycles*1.1;
+
+                                grafics.minXCycles = xmin; grafics.minYCycles = ymin;
+                                grafics.maxXCycles = xmax; grafics.maxYCycles = ymax;
+                                grafics.historyTransformCycles.push([grafics.minXCycles, grafics.minYCycles, grafics.maxXCycles, grafics.maxYCycles]);
+                                plotCycles.requestPaint();
+                            }
+                        }
+
+                        onPressed: (mouse) => {
+                            if (grafics.modeGrafic == "move"){
+                                lastMousePos = Qt.point(mouse.x, mouse.y);
+                            }
+                            else if (grafics.modeGrafic == "zoomIn"){
+                                selectionStart = Qt.point(mouse.x, mouse.y);
+                                selectionEnd = Qt.point(mouse.x, mouse.y);
+                                viewSelection = true
+                            }
+                            else if (grafics.modeGrafic == "zoomOut"){
+                                zoomOutGraf()
+                            }
+                            
+                        }
                         
-                        
-                        if (win.viewCh1) {drawPolyline("#22c55e", d=>d.ch1);}
-                        if (win.viewCh2) {drawPolyline("#60a5fa", d=>d.ch2);}
+                        onPositionChanged: (mouse) => {
+                            if (grafics.modeGrafic == "move"){
+                                let deltaX = mouse.x - lastMousePos.x;
+                                let deltaY = mouse.y - lastMousePos.y;
+                                moveGraf(deltaX, deltaY);
+                                lastMousePos = Qt.point(mouse.x, mouse.y);
+                            }
+                            else if (grafics.modeGrafic == "zoomIn"){
+                                selectionEnd = Qt.point(mouse.x, mouse.y);
+                            }
+                        }
+
+                        onReleased: (mouse) => {
+                            if (grafics.modeGrafic == "move"){
+                                let actions = null
+                            }
+                            else if (grafics.modeGrafic == "zoomIn"){
+                                let _xmin = Math.min(selectionStart.x, selectionEnd.x);
+                                let _ymin = Math.min(selectionStart.y, selectionEnd.y);
+                                let _xmax = Math.max(selectionEnd.x, selectionStart.x);
+                                let _ymax = Math.max(selectionEnd.y, selectionStart.y);
+                                if(Math.abs(_xmax - _xmin) >= 1e-3 && Math.abs(_ymax - _ymin) >= 1e-3){
+                                   zoomInGraf(_xmin, _ymin, _xmax, _ymax);
+                                }
+                                viewSelection = false;
+                            }
+                        }
+
+                        // ---- Recuadro de selección ----
+                        Rectangle {
+                            color: "transparent"
+                            border.color: '#ffffff'
+                            border.width: 1
+                            visible: mouseArea.viewSelection
+                            x: Math.min(mouseArea.selectionStart.x, mouseArea.selectionEnd.x)
+                            y: Math.min(mouseArea.selectionStart.y, mouseArea.selectionEnd.y)
+                            width: Math.abs(mouseArea.selectionEnd.x - mouseArea.selectionStart.x)
+                            height: Math.abs(mouseArea.selectionEnd.y - mouseArea.selectionStart.y)
+                        }
                     }
                 }
 
-                // ---- Ángulo del máximo vs Nº de ciclo ----
-                Canvas {
-                    id: plotCycles
-                    visible: win.viewMode === "cycles"
-                    anchors.fill: parent
-                    anchors.margins: 20
-                    antialiasing: true
+                //  ===== Barra de control - Gráficas =====
+                Rectangle {
+                    id: controls
+                    Layout.fillHeight: true
+                    Layout.preferredWidth: 70
+                    radius: 12
+                    color: "#111827"
+                    border.color: "#1f2937"; border.width: 1
 
-                    onPaint: {
-                        const ctx=getContext("2d");
-                        const W=width, H=height;
+                    ColumnLayout {
+                        anchors.fill: parent;
+                        spacing: 10;
 
-                        ctx.clearRect(0,0,W,H); // Limpieza de la pantalla
-                        ctx.fillStyle="#111827"; ctx.fillRect(0,0,W,H); //Creación de un rectangulo
-
-                        const ml=80,mr=10,mt=10,mb=30;
-                        const pw=W-ml-mr, ph=H-mt-mb;
-                        
-                        if (pw<=0||ph<=0) {console.log("Los margenes son"); return;}
-
-                        // marco
-                        ctx.strokeStyle="#1f2937"; ctx.strokeRect(ml,mt,pw,ph);
-
-                        ctx.fillStyle="#9ca3af"; ctx.font="12px sans-serif"; ctx.textAlign="center";
-                        ctx.fillText("Tiempo", ml+pw/2, H);
-                        ctx.save(); ctx.translate(16, mt+ph/2); ctx.rotate(-Math.PI/2);
-                        ctx.fillText("Ángulo del máximo (°)", 0, 0); ctx.restore();
-
-                        const n1=win.cyclePeakCh1Angles.length, n2=win.cyclePeakCh2Angles.length;
-                        const N=Math.max(n1,n2);
-                        
-                        if (N===0){
-                            ctx.fillStyle="#9ca3af"; ctx.textAlign="left";
-                            ctx.fillText("Sin ciclos completados aún…", ml+10, mt+20); return;
+                        ButtonGroup {
+                            id: grupoBotones
+                            exclusive: true
                         }
 
-                        // Autoescalado eje X
-                        let xmin=+Infinity,xmax=-Infinity;
+                        ButtonGrafics {
+                            // text: "Restaurar gráfica"
+                            ButtonGroup.group: grupoBotones
+                            icon.source: "assets/house.svg"
+                            icon.color: checked ? 'transparent' : "white"
+                            ToolTip.visible: hovered
+                            ToolTip.text: "Restaurar gráfica"
 
-                        for (let i=0;i<n1;i++){
-                            const v=win.cyclePeakCh1Times[i];
-                            if (isFinite(v) && win.viewCh1){xmin=Math.min(xmin,v); xmax=Math.max(xmax,v);}
-                        }
-
-                        for (let i=0;i<n2;i++){
-                            const v=win.cyclePeakCh2Times[i];
-                            if (isFinite(v) && win.viewCh2){xmin=Math.min(xmin,v); xmax=Math.max(xmax,v);}
-                        }
-                        
-                        if (Math.abs(xmax-xmin)<1e-6) xmax=xmin+1.0;
-                        const padx=(xmax-xmin)*0.08; xmin-=padx; xmax+=padx;
-                        const xMap = (vx) => ml + ((vx-xmin)/(xmax - xmin))*pw;
-
-                        // Autoescalado eje Y
-                        let ymin=+Infinity,ymax=-Infinity;
-
-                        for (let i=0;i<n1;i++){
-                            const v=win.cyclePeakCh1Angles[i];
-                            if (isFinite(v) && win.viewCh1){ymin=Math.min(ymin,v); ymax=Math.max(ymax,v);}
-                        }
-                        for (let i=0;i<n2;i++){
-                            const v=win.cyclePeakCh2Angles[i];
-                            if (isFinite(v) && win.viewCh2){ymin=Math.min(ymin,v); ymax=Math.max(ymax,v);}
-                        }
-
-                        if (!(ymin<Infinity && ymax>-Infinity)) { ymin=win.xMinDeg; ymax=win.xMaxDeg;}
-                        if (Math.abs(ymax-ymin)<1e-6) ymax=ymin+1.0;
-                        const pady=(ymax-ymin)*0.08; ymin-=pady; ymax+=pady;
-                        const yMap=(vy)=> mt + ph*(1-(vy-ymin)/(ymax-ymin));
-
-                        // grilla
-                        ctx.strokeStyle="#253041"; ctx.beginPath();
-                        for (let gy=0; gy<=6; gy++){ const y=mt+ph*(gy/6); ctx.moveTo(ml,y); ctx.lineTo(ml+pw,y); }
-                        ctx.stroke();
-                        ctx.textAlign="right"; ctx.fillStyle="#9ca3af";
-
-                        for (let gy=0; gy<=6; gy++){
-                            const vy=ymin+(ymax-ymin)*(gy/6); const y=mt+ph*(1-gy/6);
-                            ctx.fillText(vy.toFixed(2), ml-6, y+4);
-                        }
-
-                        ctx.textAlign="center";
-
-                        const maxTicks=10, step=Math.max(1, Math.floor(xmax/maxTicks));
-
-                        for (let c=0; c<=xmax; c+=step){ const x=xMap(c); ctx.fillText(c.toString(), x, mt+ph+18); }
-
-                        function drawSeries(color, arr1, arr2){
-                            ctx.strokeStyle=color; ctx.lineWidth=2; ctx.beginPath();
-                            let started=false;
-                            for (let i=1;i<=arr1.length;i++){
-                                const u=arr1[i-1], v=arr2[i-1];
-                                if (!isFinite(v)) continue;
-                                const x=xMap(u), y=yMap(v);
-                                if(!started){ctx.moveTo(x,y); started=true;} else ctx.lineTo(x,y);
-                            }
-                            ctx.stroke(); ctx.fillStyle=color;
-                            for (let i=1;i<=arr1.length;i++){
-                                const u=arr1[i-1], v=arr2[i-1];
-                                if (!isFinite(v)) continue;
-                                const x=xMap(u), y=yMap(v);
-                                ctx.beginPath(); ctx.arc(x,y,3,0,Math.PI*2); ctx.fill();
+                            onClicked: {
+                                grafics.modeGrafic = "home";
+                                grafics.resetGrafics();
                             }
                         }
-
-                        if (win.viewCh1) {
-                            drawSeries("#22c55e", win.cyclePeakCh1Times, win.cyclePeakCh1Angles);
-                            // drawSeries('#ec706c', win.cyclePeakCh1CentroidTimes, win.cyclePeakCh1CentroidAngles);
+                        ButtonGrafics {
+                            // text: "Mover gráfica"
+                            ButtonGroup.group: grupoBotones
+                            icon.source: "assets/hand.svg"
+                            ToolTip.visible: hovered
+                            ToolTip.text: "Mover gráfica"
+                            onClicked: {
+                                grafics.modeGrafic = "move";
+                            }
                         }
-                        if (win.viewCh2) {
-                            drawSeries("#60a5fa", win.cyclePeakCh2Times, win.cyclePeakCh2Angles);
-                            // drawSeries('#dac511', win.cyclePeakCh2CentroidTimes, win.cyclePeakCh2CentroidAngles);
+                        ButtonGrafics {
+                            // text: "Acercar gráfica"
+                            ButtonGroup.group: grupoBotones
+                            icon.source: "assets/zoom-in.svg"
+                            ToolTip.visible: hovered
+                            ToolTip.text: "Acercar gráfica"
+                            onClicked: {
+                                grafics.modeGrafic = "zoomIn";
+                            }
+                        }
+                        ButtonGrafics {
+                            // text: "Alejar gráfica"
+                            ButtonGroup.group: grupoBotones
+                            icon.source: "assets/zoom-out.svg"
+                            ToolTip.visible: hovered
+                            ToolTip.text: "Alejar gráfica"
+                            onClicked: {
+                                grafics.modeGrafic = "zoomOut";
+                            }
+                        }
+                        ButtonGrafics {
+                            // text: "Borrar ciclo"
+                            ButtonGroup.group: grupoBotones
+                            icon.source: "assets/delete.svg"
+                            ToolTip.visible: hovered
+                            ToolTip.text: "Elimina el último ciclo graficado"
+                            onClicked: {
+                                grafics.modeGrafic = "delete";
+                                if (win.cycleIndex > 0){
+                                    win.data = win.data.filter(dat => dat.cycle !== win.cycleIndex-cyclesDelete.length-1);
+                                    win.dataCycleFilter = win.data.filter(dat => dat.cycle == win.cycleIndex-cyclesDelete.length-2);
+
+                                    win.cyclePeakCh1Angles.pop()
+                                    win.cyclePeakCh1Times.pop()
+                                    win.cyclePeakCh2Angles.pop()
+                                    win.cyclePeakCh2Times.pop()
+
+                                    win.cyclePeakCh1CentroidAngles.pop()
+                                    win.cyclePeakCh1CentroidTimes.pop()
+                                    win.cyclePeakCh2CentroidAngles.pop()
+                                    win.cyclePeakCh2CentroidTimes.pop()
+
+                                    plotCurve.requestPaint(); plotCycles.requestPaint();
+
+                                    cyclesDelete.push(win.cycleIndex)
+                                }
+                            }
                         }
                     }
                 }
@@ -701,6 +1051,7 @@ Page {
                 color: "#111827"
                 border.color: "#1f2937"; border.width: 1
 
+  
                 RowLayout {
                     anchors.fill: parent; anchors.margins: 16; spacing: 32
 

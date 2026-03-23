@@ -12,6 +12,8 @@
   - zomm +
   - zoom -
   - mover
+  x retroceder
+  x cambiar gráfica
 * Formatear a mseg, seg, min y horas el tiempo mostrado barra general.
 * Permitir crear marcas en la gráfica durante la ejecución.
 * Marcar pestaña activa con un rectangulo al cotado izquierdo.
@@ -23,3 +25,22 @@
 * Volcado de la logica en python (usar la GUI con QML solo para mostrar los datos).
 * Crear un archivo Json para almacenar datos.
 * Crear un nuevo hilo para adquirir datos.
+* Corrección permanente del establecimiento del 0 relativo.
+* Colocar un reloj.
+* Crear teclado flotante.
+* Mejora el segmentado de la gráfica:
+  // En horizontal
+  const step=1;
+  const nTicks=Math.floor(xmax/step)-Math.ceil(xmax/step);
+  if (20<nTicks){step=0.5}
+  const firstTick=Math.ceil(xmin/step)*step;
+  const lastTick=Math.floor(xmax/step)*step;
+  ctx.beginPath();
+
+  for (let v=firstTick; v<=lastTick; v+=step){
+    const x=xMap(v);
+    ctx.moveTo(x,mTop);
+    ctx.lineTo(x,mTop+ZoneH);
+  }
+  ctx.strokeStyle="#253041";
+  ctx.stroke();
