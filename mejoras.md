@@ -19,6 +19,7 @@
 * Marcar pestaña activa con un rectangulo al cotado izquierdo.
 * Botón para actualizar la aplicación (update).
 * Mover el botón de borrar 1 ciclo.
+* Creación de margenes visualización de la gráfica
 
 # Lista de mejoras:
 * Mejorar la gestion de variables: uso de un sistema de carpetas.

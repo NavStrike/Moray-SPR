@@ -617,9 +617,19 @@ Page {
                                     ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
                                 }
                             }
-                            
+
+                            // Se guarda el canvas para el recorte
+                            ctx.save();
+
+                            // Se definine una área de recorte
+                            ctx.beginPath();
+                            ctx.rect(mLeft, mTop, ZoneW, ZoneH); 
+                            ctx.clip();
+
                             if (win.viewCh1) {drawPolyline("#22c55e", d=>d.ch1);}
                             if (win.viewCh2) {drawPolyline("#60a5fa", d=>d.ch2);}
+
+                            ctx.restore();
                         }
                     }
 
@@ -782,6 +792,14 @@ Page {
                                 }
                             }
 
+                            // Se guarda el canvas para el recorte
+                            ctx.save();
+
+                            // Se definine una área de recorte
+                            ctx.beginPath();
+                            ctx.rect(mLeft, mTop, ZoneW, ZoneH); 
+                            ctx.clip();
+
                             if (win.viewCh1) {
                                 drawSeries("#22c55e", win.cyclePeakCh1Times, win.cyclePeakCh1Angles);
                                 // drawSeries('#ec706c', win.cyclePeakCh1CentroidTimes, win.cyclePeakCh1CentroidAngles);
@@ -790,6 +808,9 @@ Page {
                                 drawSeries("#60a5fa", win.cyclePeakCh2Times, win.cyclePeakCh2Angles);
                                 // drawSeries('#dac511', win.cyclePeakCh2CentroidTimes, win.cyclePeakCh2CentroidAngles);
                             }
+
+                            ctx.restore();
+
                         }
                     }
 
