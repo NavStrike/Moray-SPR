@@ -996,19 +996,12 @@ Page {
                         anchors.fill: parent;
                         spacing: 10;
 
-                        ButtonGroup {
-                            id: grupoBotones
-                            exclusive: true
-                        }
-
                         ButtonGrafics {
                             // text: "Restaurar gráfica"
-                            ButtonGroup.group: grupoBotones
                             icon.source: "assets/house.svg"
-                            icon.color: checked ? 'transparent' : "white"
+                            icon.color: pressed  ? "transparent" : "white"
                             ToolTip.visible: hovered
                             ToolTip.text: "Restaurar gráfica"
-
                             onClicked: {
                                 grafics.modeGrafic = "home";
                                 grafics.resetGrafics();
@@ -1016,38 +1009,41 @@ Page {
                         }
                         ButtonGrafics {
                             // text: "Mover gráfica"
-                            ButtonGroup.group: grupoBotones
                             icon.source: "assets/hand.svg"
+                            icon.color: grafics.modeGrafic == "move"  ? "transparent" : "white"
                             ToolTip.visible: hovered
                             ToolTip.text: "Mover gráfica"
                             onClicked: {
-                                grafics.modeGrafic = "move";
+                                if(grafics.modeGrafic == "move"){grafics.modeGrafic = "home"}
+                                else{grafics.modeGrafic = "move"}
                             }
                         }
                         ButtonGrafics {
                             // text: "Acercar gráfica"
-                            ButtonGroup.group: grupoBotones
                             icon.source: "assets/zoom-in.svg"
+                            icon.color: grafics.modeGrafic == "zoomIn"  ? "transparent" : "white"
                             ToolTip.visible: hovered
                             ToolTip.text: "Acercar gráfica"
                             onClicked: {
-                                grafics.modeGrafic = "zoomIn";
+                                if(grafics.modeGrafic == "zoomIn"){grafics.modeGrafic = "home"}
+                                else{grafics.modeGrafic = "zoomIn"}
                             }
                         }
                         ButtonGrafics {
                             // text: "Alejar gráfica"
-                            ButtonGroup.group: grupoBotones
                             icon.source: "assets/zoom-out.svg"
+                            icon.color: grafics.modeGrafic == "zoomOut"  ? "transparent" : "white"
                             ToolTip.visible: hovered
                             ToolTip.text: "Alejar gráfica"
                             onClicked: {
-                                grafics.modeGrafic = "zoomOut";
+                                if(grafics.modeGrafic == "zoomOut"){grafics.modeGrafic = "home"}
+                                else{grafics.modeGrafic = "zoomOut"}
                             }
                         }
                         ButtonGrafics {
                             // text: "Borrar ciclo"
-                            ButtonGroup.group: grupoBotones
                             icon.source: "assets/delete.svg"
+                            icon.color: pressed  ? "transparent" : "white"
                             ToolTip.visible: hovered
                             ToolTip.text: "Elimina el último ciclo graficado"
                             onClicked: {

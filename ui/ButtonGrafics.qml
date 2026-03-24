@@ -6,16 +6,14 @@ import QtQuick.Window 2.15
 import QtQuick.Dialogs 6.0
 
 Button {
-    checkable: true
+    property real selectB: 100
     Layout.alignment: Qt.AlignCenter
     icon.width: 40
     icon.height: 40
-    icon.color: checked  ? 'transparent' : "white";
     background: Rectangle {
-        color: checked  ? '#63ffffff' : "transparent";
+        color: parent.icon.color == '#ffffff'  ? "transparent": '#63ffffff';
         radius: 12;
         border.color: "#1f2937";
         border.width: 2;
     }
-    
 }
