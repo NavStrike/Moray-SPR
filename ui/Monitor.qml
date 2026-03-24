@@ -263,7 +263,7 @@ Page {
             // ===== Barra superior =====
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 60
+                Layout.preferredHeight: 70
                 radius: 12
                 color: "#111827"
                 border.color: "#1f2937"; border.width: 1
@@ -272,94 +272,9 @@ Page {
                     anchors.fill: parent; anchors.margins: 12; spacing: 16
 
                     // Título
-                    Label { text: "Sensor SPR new"; color: "white"; font.bold: true; font.pixelSize: 20 }
+                    Label { text: "Sensor SPR V0.2"; color: "white"; font.bold: true; font.pixelSize: 20 }
 
                     Rectangle { Layout.fillWidth: true; color: "transparent" }
-
-                    Label { text: win.active ? "ACTIVO" : "DETENIDO";
-                    color: '#ffffff'; font.pixelSize: 14; font.bold: true }
-
-                    Button {
-                        text: win.viewMode === "curve" ? "Ver Ciclos" : "Ver Curva"
-                        onClicked: {
-                            win.viewMode = (win.viewMode === "curve") ? "cycles" : "curve"
-                            plotCurve.requestPaint()
-                            plotCycles.requestPaint()
-                        }
-                        Layout.preferredHeight: 36; Layout.preferredWidth: 120; font.pixelSize: 14
-                        ToolTip.visible: hovered
-                        ToolTip.text: "Alterna entre Curva (Ángulo vs Resistencia) y Ciclos (Picos vs tiempo)"
-                    }
-                }
-            }
-
-
-            // ===== Panel de lecturas (kΩ | mA) =====
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 100
-                radius: 12
-                color: "#111827"
-                border.color: "#1f2937"; border.width: 1
-
-                RowLayout {
-                    anchors.fill: parent; anchors.margins: 16; spacing: 32
-
-                    ColumnLayout {
-                        Label { 
-                            text: deviceUnites === "resistance" ? "CH1 (kΩ)": "CH1 (mA)";
-                            color: "#22c55e";
-                            font.pixelSize: 14;
-                            font.bold: true
-                        }
-                        Label {
-                            text: isFinite(ch1) ? (deviceUnites === "resistance" ? (ch1).toFixed(3) : ch1.toFixed(3)) : "—";
-                            color: "white";
-                            font.pixelSize: 32;
-                            font.bold: true 
-                        }
-                    }
-
-                    ColumnLayout {
-                        Label {
-                            text: deviceUnites === "resistance" ? "CH2 (kΩ)": "CH2 (mA)";
-                            color: "#60a5fa";
-                            font.pixelSize: 14;
-                            font.bold: true
-                        }
-                        Label { text: isFinite(ch2) ? (deviceUnites === "resistance" ? (ch2).toFixed(3) : ch2.toFixed(3)) : "—"; color: "white"; font.pixelSize: 32; font.bold: true }
-                    }
-
-                    ColumnLayout {
-                        Label { text: "Ángulo (°)"; color: "#f472b6"; font.pixelSize: 14; font.bold: true }
-                        Label { text: isFinite(win.angleRel) ? win.angleRel.toFixed(2) : "—"; color: "white"; font.pixelSize: 32; font.bold: true }
-                    }
-
-                    ColumnLayout {
-                        Label { text:"Tiempo" + scaleUnitesTime(win.measurementTime);
-                        color: "#fbbf24"; font.pixelSize: 14; font.bold: true }
-                        Label { text: isFinite(win.measurementTime) ? scaleTime(win.measurementTime) : "—"; color: "white"; font.pixelSize: 32; font.bold: true }
-                    }
-
-                    ColumnLayout {
-                        Label { text:"N ciclos";
-                        color: '#fa5d35'; font.pixelSize: 14; font.bold: true }
-                        Label { text: isFinite(win.cycleIndex) ? win.cycleIndex : "—"; color: "white"; font.pixelSize: 32; font.bold: true }
-                    }
-
-                    Rectangle { Layout.fillWidth: true; color: "transparent" }
-
-                    ColumnLayout {
-                        RowLayout {
-                            Label { text:"Ch1"; color: '#ffffff'; font.pixelSize: 14; font.bold: true }
-                            Switch { checked: win.viewCh1; onToggled: {win.viewCh1 = ! win.viewCh1; plotCurve.requestPaint(); plotCycles.requestPaint()} }
-                        }
-
-                        RowLayout {
-                            Label { text:"Ch2"; color: '#ffffff'; font.pixelSize: 14; font.bold: true }
-                            Switch { checked: win.viewCh2; onToggled: {win.viewCh2 = ! win.viewCh2; plotCurve.requestPaint(); plotCycles.requestPaint()} }
-                        }
-                    }
 
                     RowLayout {
                         Button {
@@ -379,7 +294,7 @@ Page {
                                 backend.setActive(true)
                                 if (win.debugLogs) console.log("[cycle] START IDA")
                             }
-                            Layout.preferredHeight: 45; Layout.preferredWidth: 100; font.pixelSize: 16
+                            Layout.preferredHeight: 45; Layout.preferredWidth: 120; font.pixelSize: 14
                         }
                         Button {
                             text: "Detener"
@@ -388,7 +303,7 @@ Page {
                                 backend.setActive(false)
                                 // El guardado ocurre en onActiveChanged(false)
                             }
-                            Layout.preferredHeight: 45; Layout.preferredWidth: 120; font.pixelSize: 16
+                            Layout.preferredHeight: 45; Layout.preferredWidth: 120; font.pixelSize: 14
                         }
                         Button {
                             text: "Limpiar"
@@ -420,7 +335,103 @@ Page {
                                 backend.changeTimer("reset")
 
                             }
-                            Layout.preferredHeight: 45; Layout.preferredWidth: 100; font.pixelSize: 16
+                            Layout.preferredHeight: 45; Layout.preferredWidth: 120; font.pixelSize: 14
+                        }
+                    }
+                }
+            }
+
+            // ===== Panel de lecturas (kΩ | mA) =====
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 95
+                radius: 12
+                color: "#111827"
+                border.color: "#1f2937"; border.width: 1
+
+                RowLayout {
+                    anchors.fill: parent; anchors.margins: 16; spacing: 32
+
+                    ColumnLayout {
+                        Label { 
+                            text: "Estado";
+                            color: '#ffffff';
+                            font.pixelSize: 14;
+                            font.bold: true
+                        }
+                        Label {
+                            text: win.active ? "EN" : "DI";
+                            color: win.active ? '#0051ff' : '#ff0000';
+                            font.pixelSize: 28;
+                            font.bold: true 
+                        }
+                    }
+
+                    ColumnLayout {
+                        Label { 
+                            text: deviceUnites === "resistance" ? "CH1 (kΩ)": "CH1 (mA)";
+                            color: "#22c55e";
+                            font.pixelSize: 14;
+                            font.bold: true
+                        }
+                        Label {
+                            text: isFinite(ch1) ? (deviceUnites === "resistance" ? (ch1).toFixed(3) : ch1.toFixed(3)) : "—";
+                            color: "white";
+                            font.pixelSize: 28;
+                            font.bold: true 
+                        }
+                    }
+
+                    ColumnLayout {
+                        Label {
+                            text: deviceUnites === "resistance" ? "CH2 (kΩ)": "CH2 (mA)";
+                            color: "#60a5fa";
+                            font.pixelSize: 14;
+                            font.bold: true
+                        }
+                        Label { text: isFinite(ch2) ? (deviceUnites === "resistance" ? (ch2).toFixed(3) : ch2.toFixed(3)) : "—"; color: "white"; font.pixelSize: 28; font.bold: true }
+                    }
+
+                    ColumnLayout {
+                        Label { text: "Ángulo (°)"; color: "#f472b6"; font.pixelSize: 14; font.bold: true }
+                        Label { text: isFinite(win.angleRel) ? win.angleRel.toFixed(2) : "—"; color: "white"; font.pixelSize: 28; font.bold: true }
+                    }
+
+                    ColumnLayout {
+                        Label { text:"Tiempo" + scaleUnitesTime(win.measurementTime);
+                        color: "#fbbf24"; font.pixelSize: 14; font.bold: true }
+                        Label { text: isFinite(win.measurementTime) ? scaleTime(win.measurementTime) : "—"; color: "white"; font.pixelSize: 28; font.bold: true }
+                    }
+
+                    ColumnLayout {
+                        Label { text:"N ciclos";
+                        color: '#fa5d35'; font.pixelSize: 14; font.bold: true }
+                        Label { text: isFinite(win.cycleIndex) ? win.cycleIndex : "—"; color: "white"; font.pixelSize: 28; font.bold: true }
+                    }
+
+                    Rectangle { Layout.fillWidth: true; color: "transparent" }
+
+                    Button {
+                        text: win.viewMode === "curve" ? "Ver Ciclos" : "Ver Curva"
+                        onClicked: {
+                            win.viewMode = (win.viewMode === "curve") ? "cycles" : "curve"
+                            plotCurve.requestPaint()
+                            plotCycles.requestPaint()
+                        }
+                        Layout.preferredHeight: 45; Layout.preferredWidth: 120; font.pixelSize: 14
+                        ToolTip.visible: hovered
+                        ToolTip.text: "Alterna entre Curva (Ángulo vs Resistencia) y Ciclos (Picos vs tiempo)"
+                    }
+
+                    ColumnLayout {
+                        RowLayout {
+                            Label { text:"Ch1"; color: '#22c55e'; font.pixelSize: 14; font.bold: true }
+                            Switch { checked: win.viewCh1; onToggled: {win.viewCh1 = ! win.viewCh1; plotCurve.requestPaint(); plotCycles.requestPaint()} }
+                        }
+
+                        RowLayout {
+                            Label { text:"Ch2"; color: '#60a5fa'; font.pixelSize: 14; font.bold: true }
+                            Switch { checked: win.viewCh2; onToggled: {win.viewCh2 = ! win.viewCh2; plotCurve.requestPaint(); plotCycles.requestPaint()} }
                         }
                     }
                 }
