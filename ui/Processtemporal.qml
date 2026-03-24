@@ -6,7 +6,6 @@ import QtQuick.Window 6.0
 import QtQuick.Dialogs 6.0
 
 Page {
-
     // ===== Processing =====
     property var data_p: []
     property int nCiclos_p: 0

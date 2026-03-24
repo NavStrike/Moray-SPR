@@ -22,6 +22,9 @@ import json
 from functions.adminData import accessData
 from functions.printInfo import print_info, print_warning, print_error, print_debug
 
+# Configurar el módulo de entrada del teclado virtual
+os.environ.setdefault("QT_IM_MODULE", "qtvirtualkeyboard")
+
 # Modo de ejecución (debug o production)
 try:
     data = accessData().data
