@@ -69,7 +69,7 @@ Dialog {
                     text: win.velMinCycle
                     font.pixelSize: 20
                     Layout.fillWidth: true
-                    onActiveFocusChanged: if(activeFocus) activeInput = velocityMin
+                    onActiveFocusChanged: if(activeFocus) {activeInput = velocityMin; Qt.inputMethod.hide()}
                 }
             }
 
@@ -88,7 +88,7 @@ Dialog {
                     text: win.velMaxCycle
                     font.pixelSize: 20
                     Layout.fillWidth: true
-                    onActiveFocusChanged: if(activeFocus) activeInput = velocityMax
+                    onActiveFocusChanged: if(activeFocus) {activeInput = velocityMax; Qt.inputMethod.hide()}
                 }
             }
                 

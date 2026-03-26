@@ -90,7 +90,7 @@ Dialog {
                     text: win.forwardStartDeg
                     font.pixelSize: 20
                     Layout.fillWidth: true
-                    onActiveFocusChanged: if(activeFocus) activeInput = anguloMin
+                    onActiveFocusChanged: if(activeFocus) {activeInput = anguloMin; Qt.inputMethod.hide()}
                     //layout.preferredHeight: 60
                 }
             }
@@ -111,7 +111,7 @@ Dialog {
                     text: win.forwardEndDeg
                     font.pixelSize: 20
                     Layout.fillWidth: true
-                    onActiveFocusChanged: if(activeFocus) activeInput = anguloMax
+                    onActiveFocusChanged: if(activeFocus) {activeInput = anguloMax; Qt.inputMethod.hide()}
                     //layout.preferredHeight: 60
                 }
             }

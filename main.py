@@ -121,18 +121,18 @@ class Backend(QObject):
         self._last_rel = float("nan")
 
         # Angulo cero relativo (ajustable)
-        self.angzeroRel = 13.7607
+        self.angzeroRel = 105.91366600000002
 
         # Ángulos de barrido
         self.angMin = 70.0
         self.angMax = 80.0
 
         # Velocidades min y max
-        self.velMin = 4
-        self.velMax = 12
+        self.velMin = 3
+        self.velMax = 38
 
         # Valor de la corriente
-        self.current = 550
+        self.current = 275
 
         # Sustancia actual
         self.listSubstances = []
@@ -140,12 +140,12 @@ class Backend(QObject):
         self.substance = ""
 
         # Parámetro de guardado en CSV
-        self.saveDataName = "default"
+        self.saveDataName = None
         self.saveDataPath = "exports"
 
         # Parámetros divisor
-        self._adq_device = "ldr" # "ldr" or "photodetector"
-        self._unites_device = "resistance" # "resistance" or "current"
+        self._adq_device = "photodetector" # "ldr" or "photodetector"
+        self._unites_device = "current" # "resistance" or "current"
         self._vcc = 3.3
         self._r_fixed_ldr = 100_000.0 # Resistencia circuito divisor LDR (ohms)
         self._r_fixed_pho = 4_700.0 # Resistencia circuito divisor fotodiodo (ohms)
@@ -220,12 +220,8 @@ class Backend(QObject):
             print_info("Se cargaron los datos correctamente")
         except Exception as e:
             print_error(f"Ha ocurrido un error al cargar los datos: {e}")
-
-        # Establecimiento de los ángulos min y max de barrido
-        try:
-            self.setMaxMinAngles(self.angMin, self.angMax)
-        except Exception as e:
-            print_error(f"Error estableciendo los ángulos: {e}")
+    
+    def chargeVariablesToEsp32(self):
 
         # Establecimiento del ángulo zero relativo por defecto
         try:
@@ -233,6 +229,18 @@ class Backend(QObject):
             print_info(f"Se ha establecido el cero en {self.angzeroRel}")
         except Exception as e:
             print_error(f"No se ha podido establecer el cero en {self.angzeroRel}: {e}")
+
+        # Establecimiento de la corriente del motor
+        try:
+            self.setCurrent(self.current)
+        except Exception as e:
+            print_error(f"Error estableciendo las velocidades: {e}")
+
+        # Establecimiento de los ángulos min y max de barrido
+        try:
+            self.setMaxMinAngles(self.angMin, self.angMax)
+        except Exception as e:
+            print_error(f"Error estableciendo los ángulos: {e}")
 
         # Establecimiento de las velocidades min y max de barrido
         try:
@@ -252,6 +260,26 @@ class Backend(QObject):
         except Exception as e:
             print_error(f"Error cargando variables para QML: {e}")
 
+    # ===== Reset de =====
+    @Slot()
+    def resetVariables(self):
+        p1 = accessData(fileName='config_default.json').data
+        if p1 is None: raise ValueError("No se pudieron cargar los datos de respaldo")
+
+        self.setAbsoluteZero(p1["angles"]["angZeroRel"])
+
+        self.setMaxMinAngles(p1["angles"]["angMin"], p1["angles"]["angMax"])
+
+        self.setMaxMinVel(p1["speeds"]["velMin"], p1["speeds"]["velMax"])
+
+        self.setCurrent(p1["current"])
+
+        self.setNameFile(p1["saveData"]["name"])
+
+        self.setAdqDevice(p1["device"]["name"])
+
+        self.chargeVariablesToQml()
+
     # ===== Lectura de datos guardados =====
     def _setValues(self):
         p1 = accessData().data
@@ -269,6 +297,8 @@ class Backend(QObject):
 
         self.saveDataName = p1["saveData"]["name"]
         self.saveDataPath = p1["saveData"]["path"]
+
+        self.current = p1["current"]
 
         p2 = accessData("substances.json").data
         if p2 is None: raise ValueError("No se pudieron cargar los datos de sustancias")
@@ -470,7 +500,7 @@ class Backend(QObject):
 
     # ===== Slots de control =====
     @Slot()
-    def setRelativeZero(self):
+    def setNewAbsoluteZero(self):
         try:
             #self._send_serial("ZC\n")
             n_ang_zero = self.angzeroRel + self._last_rel - 360*math.floor((self.angzeroRel + self._last_rel)/360)
@@ -479,7 +509,7 @@ class Backend(QObject):
             # Actualización del cero relativo para el cálculo interno
             accessData().changeZeroRel(n_ang_zero)
         except Exception as e:
-            print_error(f"Error actualizando cero relativo: {e}")
+            print_error(f"Error actualizando nuevo cero absoluto: {e}")
 
     @Slot(float)
     def setAbsoluteZero(self, abs_deg: float):
@@ -664,14 +694,6 @@ class Backend(QObject):
                         self._last_rel = rel_deg
                         self._last_serial_rx_ms = int(time.monotonic() * 1000)
                         self.serialStatusChanged.emit("ESP32 recibiendo…")
-
-                        if rel_deg > 90:
-                            try:
-                                self.setAbsoluteZero(self.angzeroRel)
-                                print_info(f"Se ha establecido el cero en {self.angzeroRel}")
-                            except Exception as e:
-                                print_error(f"No se ha podido establecer el cero en {self.angzeroRel}: {e}")
-                        
                         self.angleUpdate.emit(abs_deg, rel_deg)
                     except Exception:
                         pass
@@ -788,6 +810,7 @@ def main():
         sys.exit(1)
 
     backend.chargeVariablesToQml()
+    backend.chargeVariablesToEsp32()
 
     print_info("Aplicación iniciada. Use los controles en pantalla para activar/desactivar.")
     print_info("Presione Ctrl+C o use el botón 'Salir' para terminar.")
