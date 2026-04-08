@@ -137,6 +137,38 @@ Page {
                             spacing: 5
 
                             Label{
+                                text: "Modificar la corriente del motor:"
+                                color: "white" 
+                                font.bold: true; font.pixelSize: 20
+                                Layout.preferredHeight: 36
+                            }
+
+                            TextField {
+                                id: textMotorCurrent
+                                text: win.motorCurrent
+                                font.pixelSize: 15
+                                Layout.preferredWidth: 150
+                                Layout.preferredHeight: 36
+                                horizontalAlignment: TextInput.AlignHCenter
+                                verticalAlignment: TextInput.AlignVCenter
+                                onActiveFocusChanged: if(activeFocus) activeInput = textMotorCurrent
+                            }
+
+                            Button {
+                                text: "Establecer";
+                                enabled: !win.active;
+                                onClicked: {backend.setCurrent(textMotorCurrent.text);}
+                                Layout.preferredHeight: 36
+                                Layout.preferredWidth: 160
+                                font.pixelSize: 14
+                            }
+                        }
+
+                        RowLayout{
+                            Layout.fillWidth: true
+                            spacing: 5
+
+                            Label{
                                 text: "Cambiar el dispositivo de captura: "
                                 color: "white" 
                                 font.bold: true; font.pixelSize: 20
@@ -196,38 +228,6 @@ Page {
                             spacing: 5
 
                             Label{
-                                text: "Modificar la corriente del motor:"
-                                color: "white" 
-                                font.bold: true; font.pixelSize: 20
-                                Layout.preferredHeight: 36
-                            }
-
-                            TextField {
-                                id: textMotorCurrent
-                                text: win.motorCurrent
-                                font.pixelSize: 15
-                                Layout.preferredWidth: 150
-                                Layout.preferredHeight: 36
-                                horizontalAlignment: TextInput.AlignHCenter
-                                verticalAlignment: TextInput.AlignVCenter
-                                onActiveFocusChanged: if(activeFocus) activeInput = textMotorCurrent
-                            }
-
-                            Button {
-                                text: "Establecer";
-                                enabled: !win.active;
-                                onClicked: {backend.setCurrent(textMotorCurrent.text);}
-                                Layout.preferredHeight: 36
-                                Layout.preferredWidth: 160
-                                font.pixelSize: 14
-                            }
-                        }
-
-                        RowLayout{
-                            Layout.fillWidth: true
-                            spacing: 5
-
-                            Label{
                                 text: "Regresar a los valores por defecto: "
                                 color: "white" 
                                 font.bold: true; font.pixelSize: 20
@@ -240,6 +240,7 @@ Page {
                                 onClicked: backend.resetVariables()
                             }
                         }
+
                         Rectangle { Layout.fillHeight: true; color: "transparent" }
 
                     }
@@ -260,154 +261,5 @@ Page {
         if (! activeMayus){letter = letter.toLowerCase();}
         let newValue = activeInput.text + letter;
         activeInput.text = newValue;
-    }
-
-    Connections {
-        target: backend
-
-        function onNewLDRSampleWithAngle(tt, v1, v2, absDeg, relDeg) {
-            
-            win.measurementTime = tt;
-            win.ch1 = v1; win.ch2 = v2;
-            win.angleAbs = absDeg; win.angleRel  = relDeg;
-
-            const a = relDeg;
-            const prev = win.prevAngle;
-
-            // Se asigna el paso minimo aceptado (resolucion de movimiento)
-            const eps  = Math.max(win.epsAngle, win.hysteresisDeg);
-
-            // Valida que el angulo se encuentre en el rango establecido
-            const inside = isFinite(a) && a >= win.forwardStartDeg && a <= win.forwardEndDeg;
-            let inc = false, dec = false;
-            
-            // Se determina si esta ocurriendo un movimiento ascendente o descendente
-            if (isFinite(prev)) {
-                const d = a - prev;
-                if (d >  eps) inc = true;
-                if (d < -eps) dec = true;
-            }
-
-            // Se incrementa la cantidad de subidas o bajadas
-            if (inc) { win.incStreak++; win.decStreak = 0; }
-            else if (dec) { win.decStreak++; win.incStreak = 0; }
-            
-            // Inicio de ciclo de ida
-            if (!win.collectingForward) {
-                if (inside && win.incStreak >= win.incNeeded) {
-                    win.collectingForward = true;
-                    win.pendingCycleSnapshot = true;
-                    win.dataCycle = [];
-
-                    // El angulo debe pasar el valor del angulo definido mas un valor delta
-                    win.sawStartGate = (a >= (win.forwardStartDeg + win.startGateDelta));
-                    win.sawEndGate   = false;
-                    win.minA = a; win.maxA = a;
-
-                    // Debuggg ***
-                    // console.log("Inicio de la obtencion de data")
-
-                    if (win.debugLogs) console.log(`[cycle] ENTER a=${a.toFixed(3)} deg (incStreak=${win.incStreak})`);
-                }
-            } else {
-                // DURANTE el ciclo: acumular si está dentro
-                if (inside) {
-                    // Se asigan nuevos minimos y maximos
-                    if (a < win.minA) win.minA = a;
-                    if (a > win.maxA) win.maxA = a;
-                    // Se comprueba si se esta dentro del rango de angulos considerando los delta
-                    if (a >= (win.forwardStartDeg + win.startGateDelta)) win.sawStartGate = true;
-                    if (a >= (win.forwardEndDeg   - win.endGateDelta))   win.sawEndGate   = true;
-                    // console.log("esta dentro del rango")
-
-                    // Se agrega la nueva lectura en la lista data
-                    win.data.push({ cycle: win.cycleIndex + 1, time: tt, angle: a, ch1: v1, ch2: v2 });
-                    // Se agrega la lectura a dataCycle
-                    win.dataCycle.push({ cycle: win.cycleIndex + 1, time: tt, angle: a, ch1: v1, ch2: v2});
-                }
-
-                // FIN válido: bajada sostenida después de haber alcanzado fin, o salir por arriba
-                const reachedEnd = win.sawEndGate;
-                const endByDec   = (reachedEnd && win.decStreak >= win.decNeeded);
-                const endByExit  = (!inside && isFinite(a) && a > win.forwardEndDeg);
-                const ending     = endByDec || endByExit;
-
-                // Abort: bajada sostenida antes de alcanzar el fin
-                const abortByEarlyDec = (!reachedEnd && win.decStreak >= win.decNeeded);
-                
-                if (ending && win.pendingCycleSnapshot) {
-                    
-                    finalizeCycleAndAppendPoint();
-
-                    console.log("fin de ciclo")
-                    win.pendingCycleSnapshot = false;
-                    win.collectingForward = false;
-                    win.dataCycle = []
-                    win.cycleIndex += 1
-                    if (win.debugLogs) console.log("[cycle] EXIT (finalized)");
-                } else if (abortByEarlyDec && win.pendingCycleSnapshot) {
-                    if (win.debugLogs) console.warn("[cycle] EXIT ABORT (vuelta antes de fin)");
-                    win.pendingCycleSnapshot = false;
-                    win.collectingForward = false;
-                    resetValues()
-                }
-            }
-
-            win.prevAngle = a;
-        }
-
-        function onActiveChanged(a) {
-            win.active = a;
-            if (!a) {
-                // Guarda crudo
-                if (win.data.length > 0) {
-                    backend.saveRawDataCsv(win.data);
-                }
-                // Guarda Ángulo vs Ciclo (usando las dos series)
-                if (win.cyclePeakCh1Times.length > 0 || win.cyclePeakCh2Times.length > 0) {
-                    backend.saveAngleVsTimeCsv(win.cyclePeakCh1Times, win.cyclePeakCh2Times, win.cyclePeakCh1Angles, win.cyclePeakCh2Angles);
-                }
-            }
-        }
-
-        function onAngleUpdate(absDeg, relDeg) {
-            win.angleAbs = absDeg;
-            win.angleRel = relDeg;
-        }
-
-        function onCsvSaved(path) { console.log("CSV guardado en: " + path); }
-        
-        function onCsvError(msg)  { console.log("Error CSV: " + msg); }
-        
-        function onAngleMaxMin(angMin, angMax) {
-            win.forwardStartDeg = angMin;
-            win.forwardEndDeg   = angMax;
-            win.xMinDeg = win.forwardStartDeg - 0.5;
-            win.xMaxDeg = win.forwardEndDeg + 0.5;
-        }
-
-        function onSpeedMaxMin(vMin, vMax) {
-            win.velMinCycle = vMin;
-            win.velMaxCycle = vMax;
-        }
-
-        function onSubstanceAct(list_subs, list_angles, subs){
-            win.substances = list_subs;
-            win.anglesSubstances = list_angles;
-            win.substance = subs;
-        }
-
-        function onAdqDeviceChanged(device, unites) {
-            win.device = device;
-            win.deviceUnites = unites;
-        }
-
-        function onCurrentChanged(current){
-            win.motorCurrent = current;
-        }
-
-        function onTimeUpdate(time){
-            win.realTime = time;
-        }
     }
 }
