@@ -178,8 +178,7 @@ class Backend(QObject):
         # ADS1115 (si disponible)
         try:
             import board # type: ignore
-            from adafruit_ads1x15.ads1115 import ADS1115, P0, P1, P2    # type: ignore
-            from adafruit_ads1x15.analog_in import AnalogIn             # type: ignore
+            from adafruit_ads1x15 import ADS1115, AnalogIn, ads1x15   # type: ignore
 
             print_info("Inicializando ADS1115...")
             i2c = board.I2C()
@@ -187,9 +186,9 @@ class Backend(QObject):
             self.ads.gain = 1
             self.ads.data_rate = 860
 
-            self.chan0 = AnalogIn(self.ads, P0) # Canal de sensor 1
-            self.chan1 = AnalogIn(self.ads, P1) # Canal de sensor 2
-            self.chanRef0 = AnalogIn(self.ads, P2) # Canal de voltaje referencia (3V3/2)
+            self.chan0 = AnalogIn(self.ads, ads1x15.Pin.A0) # Canal de sensor 1
+            self.chan1 = AnalogIn(self.ads, ads1x15.Pin.A1) # Canal de sensor 2
+            self.chanRef0 = AnalogIn(self.ads, ads1x15.Pin.A2) # Canal de voltaje referencia (3V3/2)
 
             self._use_ads = True
             print_info("ADS1115 inicializado correctamente")
