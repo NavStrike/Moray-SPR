@@ -20,6 +20,7 @@
 * Botón para actualizar la aplicación (update).
 * Mover el botón de borrar 1 ciclo.
 * Creación de margenes visualización de la gráfica
+* Que los valores del reseteo cambien los valores graficamente
 
 # Lista de mejoras:
 * Mejorar la gestion de variables: uso de un sistema de carpetas.
