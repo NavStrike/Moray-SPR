@@ -168,33 +168,38 @@ ApplicationWindow {
             ButtonPage {
                 id: buttonMonitor
                 icon.source: "assets/monitor.svg"
+                icon.color: viewPage == "monitor" ? 'white': "#686b6e"
                 onClicked: { viewPage = "monitor" }
 
                 Rectangle {
                     id: separator1
-                    width: 5
+                    width: 4
                     height: parent.height
                     color: viewPage == "monitor" ? 'white': "transparent"
                 }
             }
             
             ButtonPage {
+                id: buttonTools
                 icon.source: "assets/gears.svg"
+                icon.color: viewPage == "tools" ? 'white': "#686b6e"
                 onClicked: { viewPage = "tools" }
                 Rectangle {
                     id: separator2
-                    width: 5
+                    width: 4
                     height: parent.height
                     color: viewPage == "tools" ? 'white': "transparent"
                 }
             }
 
             ButtonPage {
+                id: buttonProcess
                 icon.source: "assets/flask.svg"
+                icon.color: viewPage == "process" ? 'white': '#686b6e'
                 onClicked: { viewPage = "process" }
                 Rectangle {
                     id: separator3
-                    width: 5
+                    width: 4
                     height: parent.height
                     color: viewPage == "process" ? 'white': "transparent"
                 }
@@ -228,6 +233,6 @@ ApplicationWindow {
 
         Monitor{} // Page 1
         Tools{} // Page 2
-        Processtemporal2{} // Page 3
+        Process{} // Page 3
     }
 }
