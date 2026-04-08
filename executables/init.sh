@@ -1,4 +1,4 @@
 #!/bin/bash
 cd /home/pi/spr 
-source ./venv/bin/activate
+source ./venv_gui/bin/activate
 python ./stableVersion/main.py
