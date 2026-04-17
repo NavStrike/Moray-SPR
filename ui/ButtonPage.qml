@@ -1,9 +1,9 @@
 // ===== IMPORTS =====
-import QtQuick 2.15
-import QtQuick.Controls.Basic 2.15
-import QtQuick.Layouts 1.15
-import QtQuick.Window 2.15
-import QtQuick.Dialogs 6.0
+import QtQuick
+import QtQuick.Controls.Basic
+import QtQuick.Layouts
+import QtQuick.Window
+import QtQuick.Dialogs
 
 Button {
     Layout.alignment: Qt.AlignCenter
