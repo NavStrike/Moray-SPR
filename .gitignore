@@ -1,4 +1,37 @@
-//Archivos a ignorar en Git
-venv_gui
-Doc
-exports
+# ==========================================
+# Entornos virtuales y dependencias
+# ==========================================
+venv_gui/
+
+# ==========================================
+# Python (archivos compilados y caché)
+# ==========================================
+__pycache__/
+
+# ==========================================
+# Almacenamiento
+# ==========================================
+/database/
+/exports/
+/functions/exports/
+/exports_simulados.rar
+
+# ==========================================
+# Documentación
+# ==========================================
+/Doc/
+/matlab/
+
+# ==========================================
+# Tests
+# ==========================================
+/prueba.py
+/test_lectura_aire.py
+/functions/testReadh5.py
+/functions/testReadh5_2.py
+
+# ==========================================
+# Archvos de almacenamiento de código
+# ==========================================
+/ui/tools_to_change.qml
+/functions/sendData.py
