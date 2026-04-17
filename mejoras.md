@@ -1,12 +1,18 @@
 # Hechos:
 * Corrección temporal del establecimiento del 0 relativo.
-* Integrar el postprocesamiento.
 * Arreglar los lanzadores (.sh):
   - Eliminar linea:
     QT_QPA_GENERIC_PLUGINS=evdevtouch:/dev/input/event5
 
+# Haciendo
+* Integrar el postprocesamiento -> Código Python
+* Eliminación del parámetro n_cycle 
+* Cambio del tipo de archivo de guardado: csv, HDF5 y parquet
+* Instalación de la librería para leer archivo .h5: pip install h5py
+* Adición de un módulo de hora al prototipo (modificación física)
++ Dejar de rastrear archivos inútiles: modificación del gitignore
+
 # Urgente:
-* Pasar el postprocesamiento a python.
 * Adicionar funciones de visualización y crear barra para su gestión.
   - regresar imagen a posición defecto
   - zomm +
