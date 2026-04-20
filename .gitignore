@@ -1,7 +1,9 @@
 # ==========================================
 # Entornos virtuales y dependencias
 # ==========================================
-venv_gui/
+venv
+.venv
+/venv
 
 # ==========================================
 # Python (archivos compilados y caché)
